@@ -23,7 +23,7 @@ int main(){
     }
     maskd = maskd & fecha;
     printf("%d\n", maskd);
-
+    //Me dijeron que el uso de potencias no es lo mas recomendable, pero la idea es asi
 
 
 
