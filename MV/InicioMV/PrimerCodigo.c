@@ -174,14 +174,161 @@ void NULO (mv MV, int *cont, int *op){
 }
 
 void EMPTY(mv* MV, int opA, int opB, char operacion){
-    //No hace nada
+    printf("Funcion invalida \n");
 }
 
 //SYS,JMP,JZ,JP,JZ,JNZ,JNP,JNN,NOT,EMPTY,EMPTY,EMPTY,EMPTY,EMPTY,EMPTY,STOP,MOV,ADD,SUB,SWAP,MUL,DIV,CMP,SHL,SHR,AND,OR,XOR,LDL,LDH,RND,EMPTY
 
-
+//Terminar de revisar
 void MOV (mv* MV, int opA, int opB, char operacion){
-    char tipoA=(operacion >> 4)
+    char tipoA=(operacion >> 4) & 0x3, tipoB=(operacion>>6) & 0x3;
+    if (tipoA == 1){ //Registro
+        char sectorA = (opA>>2)&0x3;
+        int valorA = valorReg(opA>>4, sectorA);
+        if(tipoB == 2 || tipoB == 3){
+            int valorB = operando(tipoB, opB, *MV);
+            switch(sectorA){
+                case 0:
+                    for (int i=3, i>=0; i--){
+                        (*MV).registros[opA+i] = valorB & 0x000f;
+                        valorB = valorB >> 8;
+                    }
+                    break;
+                case 1:
+                    (*MV).registros[opA + 3] = valorB & 0x000f;
+                    break;
+                case 2:
+                    (*MV).registros[opA + 2] = (valorB>>8) & 0x00f;
+                    break;
+                case 3:
+                    for (int i=3, i>=2; i--){
+                        (*MV).registros[opA+i] = valorB & 0x000f;
+                        valorB = valorB >> 8;
+                    }
+                    break;
+                default:
+                    printf("Error en el sector\n");
+                    break;
+            }
+        }
+        else{
+            if(tipoB == 1){ //Registro
+                char sectorB = (opB>>2)&0x3;
+                int valorB = valorReg(opB>>4, sectorB);
+                int valorAux = 0;
+                valorAux = (*MV).registros[opA];
+                switch(sectorA){
+                    case 0:
+                        valorAux = valorAux & 0x0000;
+                        break;
+                    case 1:
+                        valorAux = valorAux & 0xFFF0;
+                        break;
+                    case 2:
+                        valorAux = valorAux & 0xFF0F;
+                        break;
+                    case 3:
+                        valorAux = valorAux & 0xFF00;
+                        break;
+                    default:
+                        printf("Error en el sector\n");
+                        break;
+                valorAux = valorAux + valorB;
+                (*MV).registros[opA] = valorAux;
+                }
+            }
+        }
+    }
+    else{
+        if(tipoA == 3){ //memoria
+            //Todos los posibles tipos de B
+            if (tipoB == 0){
+                printf("Error en el tipo de operando\n");
+            }
+            else{
+                if(tipoB == 2 || tipoB == 3){//B no es registro
+                    int valorB = operando(tipoB, opB, *MV);
+                    for(int i=3, i>=0; i--){
+                        (*MV).memoria[opA+i] = (valorB >> (i*8)) & 0xFF;
+                    }
+                    //Aca guarda byte a byte el valor inmediato o del registro
+                }
+                else{ //Aca B es un registro
+                    //Aca guarda el valor del registro en memoria
+                    char sector= (opB>>2)&0x3;
+                    int ValorMem = 0, valorB = valorReg(opB>>4, sector);  //B = xxxx , 00xx , 000x o 00x0
+                    for(int i=0, i<=3; i++){
+                        ValorMem = (*MV).memoria[opA+i];
+                        ValorMem = ValorMem << 8;
+                    }
+                    switch(sector){
+                    case 0:
+                        //Se asigna todo B
+                        for(int i=3, i>=0; i--){
+                            (*MV).memoria[opA+i] = ValorMem & 0x000F;
+                            ValorMem = ValorMem >> 8;
+                        }
+                    case 1:
+                        (*MV).memoria[opA + 3] = ValorMem & 0x000F;
+                    case 2:
+                        (*MV).memoria[opA + 2] = (ValorMem>>8) & 0x00f;
+                    case 3:
+                    for(int i=3, i>=2; i--){
+                        (*MV).memoria[opA+i] = ValorMem & 0x000F;
+                        ValorMem = ValorMem >> 8;
+                    }
+                    default:
+                        printf("Error en el sector\n");
+                        break;
+                    }
+                    //Dependiendo el sector guarda los respectivos bytes en memoria
+                }
+            }
+        } ///////////////////////////
+        else{
+            if(tipoA == 0 || tipoA == 2){ //Inmediato o nulo
+                printf("Error en el tipo de operando\n");
+        }
+    }
+
+    }
+}
+int operando(int tipo, int op, mv MV){
+    switch(tipo){
+        case 0:
+            //linea de operando vacio
+            break;
+        case 1:
+            valorReg(op>>4, (op>>2)&0x3);
+            break;
+        case 2:
+            valor = op;
+            break;
+        case 3:
+            valor = MV.memoria[op];
+            break;
+    }
+}
+int valorReg(char posReg, char sector){
+    int valor=0;
+    switch (sector){
+        case 0:
+            valor = (*MV).registros[posReg];
+            break;
+        case 1:
+            valor = (*MV).registros[posReg] & 0x000f;
+            break;
+        case 2:
+            valor = (*MV).registros[posReg] & 0x00f0;
+            break;
+        case 3:
+        valor = (*MV).registros[posReg] & 0x00ff;
+            break;
+        default:
+            printf("Error en el sector\n");
+            break;
+    }
+    return valor;
 }
 
 void ADD (mv* MV, int opA, int opB, char operacion){
@@ -195,15 +342,20 @@ void JMP (mv* MV, int opA, int opB, char operacion){
 void JZ (mv* MV, int opA, int opB, char operacion){
     //JZ
     
-    if (((*MV).registros[8]) & 0xD000 == 0){ //CC
+    if (((*MV).registros[8]) & 0x8000 ==0  && (*MV).registros[8] & 0x4000 ==0){ //CC
         (*MV).registros[5] = opA; //IP
     }
 }
 
+void JP(mv* MV, int opA, int opB, char operacion){
+    if (((*MV).registros[8] & 0x8000) ==0 && ((*MV).registros[8] & 0x4000) ==0) {
+        (*MV).registros[5] = opA; // IP
+    }
+}
+
 void JN (mv* MV, int opA, int opB, char operacion){
-    //JN
-    
-    if (((*MV).registros[8]) & 0xD000 < 0){ //CC
+        
+    if (((*MV).registros[8]) & 0x8000==1 && ((*MV).registros[8]) & 0x4000 ==0){ //CC
         (*MV).registros[5] = opA; //IP
     }
 }
@@ -211,7 +363,7 @@ void JN (mv* MV, int opA, int opB, char operacion){
 void JNZ (mv* MV, int opA, int opB, char operacion){
     //JN
     
-    if (((*MV).registros[8]) & 0xD000 != 0){ //CC
+    if ((((*MV).registros[8]) & 0x8000 ==1 && (*MV).registros[8] & 0x4000 ==0) || ((*MV).registros[8]) & 0x8000 ==0 &&  (*MV).registros[8] & 0x4000 ==0){ //CC
         (*MV).registros[5] = opA; //IP
     }
 }
@@ -220,7 +372,7 @@ void JNZ (mv* MV, int opA, int opB, char operacion){
 void JNP (mv* MV, int opA, int opB, char operacion){
     //JN
     
-    if (((*MV).registros[8]) & 0xD000 <= 0){ //CC
+    if ((((*MV).registros[8]) & 0x8000 ==1 &&  (*MV).registros[8] & 0x4000 ==0) || ((*MV).registros[8]) & 0x8000 ==0 &&  (*MV).registros[8] & 0x4000 ==1){ //CC
         (*MV).registros[5] = opA; //IP
     }
 }
@@ -229,7 +381,7 @@ void JNP (mv* MV, int opA, int opB, char operacion){
 void JNN (mv* MV, int opA, int opB, char operacion){
     //JN
     
-    if (((*MV).registros[8]) & 0xD000 >=  0){ //CC
+    if ((((*MV).registros[8]) & 0x8000 ==0 &&  (*MV).registros[8] & 0x4000 ==1) || ((*MV).registros[8]) & 0x8000 ==0 && (*MV).registros[8] & 0x4000 ==0){ //CC
         (*MV).registros[5] = opA; //IP
     }
 }
@@ -251,4 +403,10 @@ int LDL (mv* MV, int opA, int opB){
 
 int RND (mv* MV, int opA, int opB){
     return= rand() % (opB + 1);
+}
+
+int AND (mv* MV, int opA, int opB){
+    opA= opA & opB;
+    if (opA & 0x01) 
+
 }
