@@ -80,8 +80,9 @@ int main(int argc, char *argv[]){
     printf("%s %s %s", argv[0], argv[1], argv[2]);
     LeeCS(&MV);
 
-    Disassembler(&MV);
-    if(argv[2] == "d")
+    printf("\n");
+    if(strcmp(argv[2],"-d") == 0)
+        Disassembler(&MV);
         
 
     return 0;
