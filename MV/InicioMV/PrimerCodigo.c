@@ -1,6 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#
+
+#define EDX 13;
+
 
 
 typedef struct{
@@ -14,7 +18,7 @@ typedef struct{
     int registros[16];  //Del elemento 8 al 15 son valores enteros, los demas son referencias a memoria
     TablaS TSeg[2];} mv;
 
-void lectura(mv*);
+void lectura(mv*, char*[]);
 void CargaRegistros(mv*, int);
 
 void SYS(mv*,int, int,char );
@@ -44,8 +48,16 @@ void LDL(mv*,int, int,char  );
 void LDH(mv*,int, int,char );
 void RND(mv*,int, int,char );
 
+void SYSR(mv* , int , char , char, short int);
+void SYSW(mv* , int , char, char, short int );
+
 void LeeCS(mv*);
 void CAMBIACC(mv*, int);
+
+int punteroReg(mv , int , int* );
+
+void EscrFormato(mv* , int ,int , short int, char);
+void leeFormato(mv , int *, int , char );
 
 void SACAREGISTRO(mv, int *, int *);
 void INMEDIATO(mv, int *, int *);
@@ -60,19 +72,20 @@ char* EscrMem(mv , int );
 
 void Disassembler(mv*);
 
-int main(){
+int main(int argc, char *argv[]){
     //Las funciones del vector deben recibir los mismos parametros
 
     mv MV; //Variable maquina virtual
-    lectura (&MV); //Llamada a la funcion lectura
-
+    lectura (&MV, argv); //Llamada a la funcion lectura
+    printf("%s %s %s", argv[0], argv[1], argv[2]);
     LeeCS(&MV);
 
-    Disassembler(&MV);
-    /*if(args >= 4 && argv[4] == "-d")
+    printf("\n");
+    if(strcmp(argv[2],"-d") == 0)
         Disassembler(&MV);
+        
 
-    return 0;*/
+    return 0;
 }
 
 void CargaRegistros(mv* MV, int tamCS){
@@ -84,14 +97,6 @@ void CargaRegistros(mv* MV, int tamCS){
 
     (*MV).registros[0] = 0x0;
     (*MV).registros[1] = 0x0;
-    (*MV).registros[2] = 0x0;
-    (*MV).registros[3] = 0x0;
-    (*MV).registros[4] = 0x0;
-    (*MV).registros[5] = 0x0;
-    (*MV).registros[6] = 0x0;
-    (*MV).registros[7] = 0x0;
-    (*MV).registros[8] = 0x0;
-    (*MV).registros[9] = 0x0;
     (*MV).registros[10] = 0x0;
     (*MV).registros[11] = 0x0;
     (*MV).registros[12] = 0x0;
@@ -107,11 +112,24 @@ void CargaRegistros(mv* MV, int tamCS){
     //Los demas registros se inicializan al usarlos
 }
 
-void lectura(mv* MV){
+void lectura(mv* MV, char* argv[]){
 
-    FILE *arch = fopen("sample.vmx", "rb");
+    FILE *arch = fopen(argv[1], "rb");
+    //FILE *arch = fopen("lectura_escritura_char41.vmx", "rb");
     if( arch != NULL){
-        fread((*MV).memoria, sizeof(char), 8, arch); //Se leen bytes de forma arbitraria, los primeros 7 son el header, siendo los ultimos 2 el tamaño 
+        fread((*MV).memoria, sizeof(char), 8, arch); //Se leen bytes de forma arbitraria, los primeros 7 son el header, siendo los ultimos 2 el tamaño
+        char* cabecera = "VMX25";
+        int i=0;
+        int iguales = 1;
+        while(i<5 && iguales){
+            iguales = cabecera[i] == (*MV).memoria[i];
+            i++;
+        }
+        if(!iguales ){
+            printf("Error, cabecera no valida\n");
+            fclose(arch);
+            STOP(MV, 0, 0, 0); //Error
+        }
         
         int tamCS = ((*MV).memoria[6] << 8 )| (*MV).memoria[7];
         printf("%d \n",tamCS);
@@ -130,7 +148,7 @@ void lectura(mv* MV){
 }
 
 void LeeCS (mv *MV){
-    void (*Funciones[32])(mv*, int, int, char) = {STOP,JMP,JZ,JP,JZ,JNZ,JNP,JNN,NOT,EMPTY,EMPTY,EMPTY,EMPTY,EMPTY,EMPTY,STOP,MOV,ADD,SUB,SWAP,MUL,DIV,CMP,SHL,SHR,AND,OR,XOR,LDL,LDH,RND,EMPTY};
+    void (*Funciones[32])(mv*, int, int, char) = {SYS,JMP,JZ,JP,JZ,JNZ,JNP,JNN,NOT,EMPTY,EMPTY,EMPTY,EMPTY,EMPTY,EMPTY,STOP,MOV,ADD,SUB,SWAP,MUL,DIV,CMP,SHL,SHR,AND,OR,XOR,LDL,LDH,RND,EMPTY};
     void (*FuncOperandos[4])(mv, int *, int *) = {NULO,SACAREGISTRO,INMEDIATO,MEMORIA};
 
 
@@ -147,27 +165,18 @@ void LeeCS (mv *MV){
         //En instruccion la receta de la orden
         //xx x_x_xxxx
         int BytesA=0, BytesB=0;
-        ////Perdon por este cambio, me di cuenta que si el tipo es 0, lo sustituye en la funcion
-        //// y por ende nunca podes usar op para fijarte el tipo
         
-        printf("TipoA: %d, TipoB: %d\n", opA, opB);
-
         FuncOperandos[opB](*MV, &cont, &BytesB); //(MV, cont, bytesOp);
         
         FuncOperandos[opA](*MV, &cont, &BytesA);
-
-        printf("Byte: %0x,  opA: %0x, opB: %0x\n",instruccion, opA, opB);
-        
         cont++;
-        printf("IPAux: %d, cont: %d\n", IPaux, cont);
-        printf("\n");
         IPaux= IPaux + cont;
         cont = 0;
         (*MV).registros[5]=IPaux; //Graba en el IP la proxima instruccion a leer
         
         if(operacion >= 0x0 & operacion<= 0x8)//Solo un operando
             if(opB != 0)//Se usa B, no A. Ignoramos A
-                Funciones[operacion](MV, BytesB, 0, instruccion); //Llama a la funcion correspondiente
+                Funciones[operacion](MV, 0, BytesB, instruccion); //Llama a la funcion correspondiente
             else{
                 printf("Error, operando B nulo\n");
                 STOP(MV, opA, opB, instruccion); //Error
@@ -187,10 +196,10 @@ void LeeCS (mv *MV){
                     STOP(MV, opA, opB, instruccion); //Error
                 }
             else{
-                printf("Fin de ejecucion");
+                printf("\n Fin de ejecucion");
                 STOP(MV, opA, opB, instruccion); //Error
             }
-        
+        IPaux = (*MV).registros[5]; //Graba en el IP la proxima instruccion a leer, importa al hacer jump
     }
 
 }
@@ -225,10 +234,10 @@ void MEMORIA (mv MV, int *cont, int *op){
     *cont += 2;
     //
     *cont += 1; //Aumento el contador
-    codreg= (MV.memoria[MV.registros[5]+ *cont]>>4)&0x0f; //Codigo del registro en el vector
+    codreg= (MV.memoria[MV.registros[5]+ *cont]>>4)&0x0F; //Codigo del registro en el vector
     
     basereg = MV.registros[codreg] >> 16;
-    offset= MV.registros[codreg] & 0x00FF;
+    offset= MV.registros[codreg] & 0x0000FFFF;
 
     //PosMem = MV.TSeg[basereg].Base + offset + inmediato;
 
@@ -259,41 +268,34 @@ void setMemoria(mv* MV, int posMem, int valorB){
 }
 
 void setReg(mv *MV, char posA, char sectorA, int valorB){
-    if(valorB == -1){//Por ahi borrar
-        printf("Error en el tipo de ValoropST\n");
+    switch(sectorA){
+        case 0:
+            (*MV).registros[posA] = valorB;
+            break;
+        case 1: //L
+            (*MV).registros[posA] &= 0xFFFFFF00;
+            (*MV).registros[posA] |= valorB & 0x000000FF ;
+            break;
+        case 2:
+            (*MV).registros[posA] &= 0xFFFF00FF;
+            (*MV).registros[posA] |= valorB & 0x000000FF << 8;
+            break;
+        case 3:
+            (*MV).registros[posA] &= 0xFFFF0000;
+            (*MV).registros[posA] |= valorB & 0x0000FFFF;
+            break;
+        default: //Es necesario???
+            printf("Error en el sector\n");
+            STOP(MV, 0, 0, 0); //Error
+            break;
     }
-    else
-        switch(sectorA){
-            case 0:
-                (*MV).registros[posA] = valorB;
-                break;
-            case 1:
-                (*MV).registros[posA] &= 0xFFF0;
-                (*MV).registros[posA] |= valorB & 0x000F;
-                break;
-            case 2:
-                (*MV).registros[posA] &= 0xFF0F;
-                (*MV).registros[posA] |= valorB & 0x00F0;
-                break;
-            case 3:
-                (*MV).registros[posA] &= 0xFFFF0000;
-                (*MV).registros[posA] |= valorB & 0x0000FFFF;
-                break;
-            default:
-                printf("Error en el sector\n");
-                STOP(MV, 0, 0, 0); //Error
-                break;
-        }
 }
 
 int ValoropST(int tipo, int op, mv* MV){ //Valor operando Segun Tipo
-    char posReg = op>>4&0x0f;
+    char posReg = op>>4 & 0x0f;
     char sector = (op>>2) & 0x3;
     int valor=0,i;
     switch(tipo){
-        case 0:
-            return -1;//linea de ValoropST vacio, return -1???
-            break;
         case 1:
             return getReg(*MV, posReg, sector); //(mv, direccion en mv.registro, sector)
             break;
@@ -314,16 +316,17 @@ int getReg(mv MV, char posReg, char sector){
 
     switch (sector){
         case 0:
-            valor = MV.registros[ posReg];
+            valor = MV.registros[posReg];
             break;
         case 1:
-            valor = MV.registros[posReg] & 0x000f;
+            valor = MV.registros[posReg] & 0x000000FF;
             break;
         case 2:
-            valor = MV.registros[posReg] & 0x00f0;
+            valor = MV.registros[posReg] & 0x0000FF00;
+            valor >> 8;
             break;
         case 3:
-            valor = MV.registros[posReg] & 0x00ff;
+            valor = MV.registros[posReg] & 0x0000FFFF;
             break;
         default:
             printf("Error en el sector\n");
@@ -334,7 +337,7 @@ int getReg(mv MV, char posReg, char sector){
 
 void set(mv* MV, int opA, char tipoA, int valorB){
     if(tipoA == 1){
-        setReg(MV, opA>>4 & 0x0f, (opA>>2) & 0x03, valorB); //(MV, direccion en mv.registro, sector, valorB)
+        setReg(MV, opA>>4 & 0x0F, (opA>>2) & 0x03, valorB); //(MV, direccion en mv.registro, sector, valorB)
     }
     else
         setMemoria(MV, opA, valorB); //(MV, direccion en memoria, valorB)
@@ -351,27 +354,34 @@ void set(mv* MV, int opA, char tipoA, int valorB){
         char tipoB=(operacion>>6) & 0x3;
         int valor = ValoropST(tipoB, opB, MV) + ValoropST(tipoA, opA, MV);
         set(MV, opA, tipoA, valor);
+        CAMBIACC(MV,valor);
     }
 
     void SUB(mv* MV, int opA, int opB, char operacion){
         char tipoA=(operacion >> 4) & 0x3;
         char tipoB=(operacion>>6) & 0x3;
-        set(MV, opA, tipoA, ValoropST(tipoA, opA, MV) - ValoropST(tipoB, opB, MV));
+        int valor = ValoropST(tipoA, opA, MV) - ValoropST(tipoB, opB, MV);
+        set(MV, opA, tipoA, valor);
+        CAMBIACC(MV,valor);
     }
 
     void MUL(mv* MV, int opA, int opB, char operacion){
         char tipoA=(operacion >> 4) & 0x3;
         char tipoB=(operacion>>6) & 0x3;
-        set(MV, opA, tipoA, ValoropST(tipoA, opA, MV)*ValoropST(tipoB, opB, MV));
+        int valor = ValoropST(tipoA, opA, MV)*ValoropST(tipoB, opB, MV);
+        set(MV, opA, tipoA, valor);
+        CAMBIACC(MV,valor);
     }
 
     void DIV(mv* MV, int opA, int opB, char operacion){
         char tipoA=(operacion >> 4) & 0x3;
         char tipoB=(operacion>>6) & 0x3;
-        int valorB = ValoropST(tipoB, opB, MV);
-
-        if(valorB != 0)
-            set(MV, opA, tipoA, ValoropST(tipoA, opA, MV)/valorB);
+        int valorB = ValoropST(tipoB, opB, MV), valorA = ValoropST(tipoA, opA, MV);
+        if(valorB != 0){
+            set(MV, opA, tipoA, valorA/valorB);
+            CAMBIACC(MV,valorA/valorB);
+            (*MV).registros[9] = valorA%valorB; //Resto
+        }
         else{
             printf("Error de division por 0\n");
             STOP(MV, 0, 0, 0); //Error division por 0
@@ -380,65 +390,69 @@ void set(mv* MV, int opA, char tipoA, int valorB){
 
     void JMP (mv* MV, int opA, int opB, char operacion){
         //JMP
-        (*MV).registros[5] = opA;
+        (*MV).registros[5] = opB;
     }
 
     void JZ (mv* MV, int opA, int opB, char operacion){
         //JZ
         
-        if (((*MV).registros[8]) & 0x8000 ==0  && (*MV).registros[8] & 0x4000 ==0){ //CC
-            (*MV).registros[5] = opA; //IP
+        if ((*MV).registros[8] == 0x40000000 ){ //CC
+            (*MV).registros[5] = opB; //IP
         }
     }
 
     void JP(mv* MV, int opA, int opB, char operacion){
-        if (((*MV).registros[8] & 0x8000) ==0 && ((*MV).registros[8] & 0x4000) ==0) {
-            (*MV).registros[5] = opA; // IP
+        if (((*MV).registros[8] == 0x80000000) && ((*MV).registros[8] == 0x40000000)) {
+            (*MV).registros[5] = opB; // IP
         }
     }
 
     void JN (mv* MV, int opA, int opB, char operacion){
             
-        if (((*MV).registros[8]) & 0x8000==1 && ((*MV).registros[8]) & 0x4000 ==0){ //CC
-            (*MV).registros[5] = opA; //IP
+        if (((*MV).registros[8]) == 0x80000000){ //CC
+            (*MV).registros[5] = opB; //IP
         }
     }
 
     void JNZ (mv* MV, int opA, int opB, char operacion){
-        //JN
-        if ((((*MV).registros[8]) & 0x8000 ==1 && (*MV).registros[8] & 0x4000 ==0) || ((*MV).registros[8]) & 0x8000 ==0 &&  (*MV).registros[8] & 0x4000 ==0){ //CC
-            (*MV).registros[5] = opA; //IP
+        if ((*MV).registros[8] == 0){ //CC
+            (*MV).registros[5] = opB; //IP
         }
     }
 
     void JNP (mv* MV, int opA, int opB, char operacion){
         //JN
         
-        if ((((*MV).registros[8]) & 0x8000 ==1 &&  (*MV).registros[8] & 0x4000 ==0) || ((*MV).registros[8]) & 0x8000 ==0 &&  (*MV).registros[8] & 0x4000 ==1){ //CC
-            (*MV).registros[5] = opA; //IP
+        if ((((*MV).registros[8]) == 0x80000000 &&  (*MV).registros[8] == 0x40000000) || ((*MV).registros[8]) == 0x80000000 &&  (*MV).registros[8] == 0x40000000){ //CC
+            (*MV).registros[5] = opB; //IP
         }
     }
 
     void JNN (mv* MV, int opA, int opB, char operacion){
         //JN
 
-        if ((((*MV).registros[8]) & 0x8000 ==0 &&  (*MV).registros[8] & 0x4000 ==1) || ((*MV).registros[8]) & 0x8000 ==0 && (*MV).registros[8] & 0x4000 ==0){ //CC
-            (*MV).registros[5] = opA; //IP
+        if (((*MV).registros[8]) == 0x80000000){ //CC
+            (*MV).registros[5] = opB; //IP
         }
     }
 
     void LDH (mv* MV, int opA, int opB, char operacion){
-        int aux=0x00000000;
-        opA=opA & 0xFF00; //quedaria 11111111 11111111 000000....
-        aux=aux | (opB & 0x00FF);
-        set(MV, opA, (operacion>>4)&0x3 ,aux);
+        int valorA = ValoropST((operacion>>4)&0x3, opA, MV);
+        int valorB = ValoropST((operacion>>6)&0x3, opB, MV);
+
+        valorA=valorA & 0xFFFF0000; //quedaria 11111111 11111111 000000....
+        valorA=valorA | (valorB & 0x0000FFFF);
+
+        set(MV, opA, (operacion>>4)&0x3 ,valorA);
     }
 
     void LDL (mv* MV, int opA, int opB, char operacion){
-        int aux=0x00000000;
-        aux=opA<<16;
-        aux=aux | (opB & 0x00FF);
-        set(MV, opA, (operacion>>4)&0x3 ,aux);
+        int valorA = ValoropST((operacion>>4)&0x3, opA, MV);
+        int valorB = ValoropST((operacion>>6)&0x3, opB, MV);
+
+        valorA=opA<<16;
+        valorA= valorA | (opB & 0x0000FFFF);
+        set(MV, opA, (operacion>>4)&0x3 ,valorA);
     }
 
     void RND (mv* MV, int opA, int opB, char operacion){
@@ -480,12 +494,10 @@ void set(mv* MV, int opA, char tipoA, int valorB){
         char tipoB=(operacion>>6) & 0x3;
         int aux;
         if ((tipoA==3 && tipoB==3) || (tipoA==3 && tipoB==2) || (tipoA==2 && tipoB==2) || (tipoA==2 && tipoB==3)){
-        aux=opA;
-        opA=opB;
-        opB=aux;
+        aux=ValoropST(tipoA, opA, MV);
+        set(MV, opA, tipoA, ValoropST(tipoB, opB, MV));
+        set(MV, opB, tipoB, aux);
         }
-        else
-        printf("Error,operando INMEDIATO o NULO"); //q hago aca?
         
     }
 
@@ -498,69 +510,238 @@ void set(mv* MV, int opA, char tipoA, int valorB){
     void SHL (mv* MV, int opA, int opB, char operacion){
         char tipoA=(operacion >> 4) & 0x3;
         int valorB = ValoropST((operacion>>6) & 0x3, opB, MV);
-        if (tipoA==0 || tipoA==2)
-        printf ("Error,operando INMEDIATO o NULO");
-        else
-        if (tipoA==1){
-            //set(MV, opA, tipoA, ValoropST(tipoA, opA, MV) << ValoropST(operacion>>6, opB, MV)); por las dudas no
-            (*MV).registros[opA] = (*MV).registros[opA]<< valorB;
-            CAMBIACC(MV,(*MV).registros[opA]);
-        }
-        else{ //tipoA==3
-            (*MV).memoria[opA]= (*MV).memoria[opA]<< valorB;
-            CAMBIACC(MV,(*MV).memoria[opA]);
-        }  
+        int aux = ValoropST(tipoA, opA, MV)<< valorB;
+        
+        set(MV, opA, tipoA, aux);
+        CAMBIACC(MV,aux);
     }
 
     void SHR (mv* MV, int opA, int opB, char operacion){
         char tipoA=(operacion >> 4) & 0x3;
-        int mascara, valorB = ValoropST((operacion>>6) & 0x3, opB, MV);
-        if (tipoA==0 || tipoA==2)
-        printf ("Error,operando INMEDIATO o NULO");
-        else
-        if (tipoA==1){
-            (*MV).registros[opA] = (*MV).registros[opA]>> valorB;
-            if (opA & 0x8000){
-                mascara = ((0xFFFF) << (16 - valorB)) & 0xFFFF;
-                (*MV).registros[opA] |= mascara;
-            }
-            CAMBIACC(MV,(*MV).registros[opA]);
+        int mascara, valorB = ValoropST((operacion>>6) & 0x3, opB, MV), aux;
+        aux = ValoropST(tipoA, opA, MV) >> valorB;
+
+        if (opA & 0x80000000){
+            mascara = ((0xFFFFFFFF) << (32 - valorB)) & 0xFFFFFFFF;
+            valorB|= mascara;
         }
-        else{ //tipoA==3
-            (*MV).memoria[opA]= (*MV).memoria[opA]>> valorB;
-            if (opA & 0x80000000){
-                mascara = ((0xFFFFFFFF) << (32 - valorB)) & 0xFFFFFFFF;
-                valorB|= mascara;
-        }
-        CAMBIACC(MV,(*MV).memoria[opA]);
-        }
+        set(MV, opA, tipoA, aux);
+        CAMBIACC(MV,aux);
     }
 
     void CMP (mv* MV, int opA, int opB, char operacion){
-    char tipoA=(operacion >> 4) & 0x3;
-    char tipoB=(operacion>>6) & 0x3;
-    int valorA=ValoropST(tipoA, opA, MV);
-    int valorB=ValoropST(tipoB, opB, MV);
-    CAMBIACC(MV, valorA-valorB);
-    /*
-    (*MV).registros[8] &= 0x0000;
-    if(valorA == valorB) //Activa el Z
-        (*MV).registros[8] |= 0x4000;   //Las mascaras estan bien?
-    else
-        if(valorA < valorB) //Activa el N
-            (*MV).registros[8] |= 0x8000;
-    //Sino no pasa nada por que el CC ya esta en 0 */
-}
+        char tipoA=(operacion >> 4) & 0x3;
+        char tipoB=(operacion>>6) & 0x3;
+        int valorA=ValoropST(tipoA, opA, MV);
+        int valorB=ValoropST(tipoB, opB, MV);
+        CAMBIACC(MV, valorA-valorB);
+        /*
+        (*MV).registros[8] &= 0x0000;
+        if(valorA == valorB) //Activa el Z
+            (*MV).registros[8] |= 0x4000;   //Las mascaras estan bien?
+        else
+            if(valorA < valorB) //Activa el N
+                (*MV).registros[8] |= 0x8000;
+        //Sino no pasa nada por que el CC ya esta en 0 */
+    }
+    
+
 ////////
-void CAMBIACC (mv* MV, int opA){
-    if (opA & 0x8000){ //da un valor
-        (*MV).registros[8] |= 0x8000; // Si el If da 1, es negativo, Activo N (bit 15)
-        (*MV).registros[8] &= ~0x4000; // Apaga bit Z (bit 14)
+int punteroReg(mv MV, int dirReg, int* op){
+
+    short int basereg = MV.registros[dirReg] >> 16;
+    short int offset= MV.registros[dirReg] & 0x0000FFFF;
+
+    *op = 0;
+    *op = MV.TSeg[basereg].Base + offset;
+
+    //Ver de implementar esto en el procedimiento de MEMORIA
+}
+    
+void SYS (mv* MV, int opA, int opB, char operacion){
+    //SYS
+    int valorB = ValoropST((operacion >> 6) & 0x03,opB , MV); //Se almacena el valor de B
+    int dirReg = EDX; //Esta variable esta hecha por que no puedo mandar una constante como parametro
+    int puntEdx;    //Se almacena el puntero a EDX, puesto que es la porcion de memoria en la que se escribira
+
+    int CX = getReg(*MV, 12, 3);
+    char CH = (CX & 0X0000FF00) >> 8, CL = CX & 0xFF; //Esto se hace para no buscarlos repetidas veces en los ciclos
+    //Almacenan el tamaño (CH) y numero de celdas (CL)
+
+    short int AL = getReg(*MV, 10, 3);  //Aca se almacena el formato
+
+    punteroReg(*MV, dirReg, &puntEdx);    //Se extrae la direccion de memoria a la que apunta edx
+
+    //Hasta aca todo claro
+    printf("\n CL: %d,  CH: %d, AL: %d \n", CL, CH, AL);
+    if (CL == 0 || CH == 0){
+        printf("Error, syscall no valida, debido a las celdas\n");
+        STOP(MV, 0, 0, 0); //Error
+    }
+    else
+        if (valorB == 1)
+            SYSR(MV, puntEdx, CH, CL, AL);
+        else
+            if(valorB == 2)
+                SYSW(MV, puntEdx, CH, CL, AL);
+            else{
+                printf("Error, syscall no valida\n");
+                STOP(MV, 0, 0, 0); //Error
+            }
+                
+}
+
+void SYSR(mv* MV, int punt, char CH, char CL, short int AL){
+    int lectura;
+    for (int i=0; i<CL; i++){
+        leeFormato(*MV, &lectura, AL, CH); //Lee el valor
+        for (int j=0; j<CH; j++){
+            (*MV).memoria[punt + CH-(j+1) + CH*i] = lectura & 0x000000FF;
+            lectura = lectura >> 8;
+        }//va a guardar los CH bytes menos significativos
+    }
+}
+
+void leeFormato(mv MV, int *lectura, int AL, char CH){
+    char * cadenaBin ;
+    int valor;
+    char * Cadena = malloc(sizeof(char)*CH);
+    switch (AL)
+    {
+    case 0x01://decimal, se lee y se guarda en CH bytes
+        scanf("%d", lectura);
+        break;
+    case 0x02: //caracteres, se leen CH char
+        scanf("%s", Cadena);
+        *lectura = Cadena[0];
+        *lectura = *lectura & 0x000000FF;
+        break;
+    case 0x04: //Octal
+        scanf("%o", lectura);
+        break;
+    case 0x08: //Hexadecimal
+        scanf("%x", lectura);
+        break;
+    case 0x10: //Binario, dios me ampare
+        cadenaBin = malloc(CH*8);
+        scanf("%s", cadenaBin);
+        //strcpy(cadenaBin,"10011001");
+        valor = 0;
+        int max;
+
+        if (strlen(cadenaBin) > CH*8)
+            max = CH*8; //En esta situacion los bits menos significativos seran cortados, ideal seria que se introduzca un numero correcto de bit
+        else
+            max = strlen(cadenaBin);
+
+        max--; //Le "saca" el caracter nulo
+
+        for (int i=max; i>0; i--){
+            if(cadenaBin[i] == '0' || cadenaBin[i] == '1')
+                valor = valor | ((cadenaBin[i]-'0')<<(max-i));
+        }
+        if(cadenaBin[0] == '1'){ //negativo
+            valor = ~valor + 1;
+        }
+
+        free(cadenaBin);
+        *lectura = valor;
+        break;
+    default:
+        printf("Error, formato no valido\n");
+        STOP(&MV, 0, 0, 0); //Error
+    }
+
+}
+
+void SYSW(mv* MV, int punt, char CH, char CL, short int AL){
+    for(int i=0;i<CL; i++){
+        EscrFormato(MV, i,punt, AL, CH);
+        printf("\n");
+
+
+    }
+
+}
+
+void EscrFormato(mv* MV, int i,int punt, short int AL, char CH){
+    int escritura = 0;
+    char* cadenaBits = malloc(CH*8 + 1);
+    for (int j=0; j<CH*8; j++){
+        cadenaBits[j] = '0';
+    }
+    cadenaBits[CH*8] = '\0';
+
+    printf("[%04X]      ", punt - (*MV).TSeg[1].Base + i*CH);
+
+    switch (AL)
+    {
+    case 0x01://decimal, se lee y se guarda en CH bytes
+        for(int j=0; j<CH; j++){
+            escritura |= (*MV).memoria[punt + i*CH + j] << ((CH-1-j)*8);
+        }
+        printf("%d", escritura);
+        break;
+    case 0x02: //caracteres, se leen CH char
+        for(int j=0; j<CH; j++){
+            printf("%c", (*MV).memoria[punt + i*CH + j]);
+        }
+        break;
+    case 0x04: //Octal
+        for(int j=0; j<CH; j++){
+            printf("%o", (*MV).memoria[punt + i*CH + j]);
+        }
+        break;
+    case 0x08: //Hexadecimal
+        for(int j=0; j<CH; j++){
+            printf("%x", (*MV).memoria[punt + i*CH + j]);
+        }
+        break;
+        
+    case 0x10: //Binario, dios me ampare
+        printf("Escritura en binario\n");
+        char bit;
+        int j;
+        //printf("%d", MV.memoria[punt + i]);
+        for(j=0; j<CH; j++){
+            escritura |= (*MV).memoria[punt + i*CH + j] << ((CH-1-j)*8);
+        }
+        j=0;
+        while(abs(escritura)>1){
+            bit = abs(escritura) % 2;
+            bit = bit+'0';
+            cadenaBits[strlen(cadenaBits)-1-j] = bit;
+            escritura = escritura >> 1;
+            j++;
+        }
+        cadenaBits[strlen(cadenaBits)-1-j] = abs(escritura) + '0';
+        if(escritura<0){
+            for(;j<strlen(cadenaBits);j++){
+                cadenaBits[strlen(cadenaBits)-1-j] = '1';
+            }
+        }
+        printf("%s", cadenaBits);
+        break;
+        
+    default:
+        printf("Error, formato no valido\n");
+        STOP(&MV, 0, 0, 0); //Error
+    }
+}
+
+///////
+void CAMBIACC (mv* MV, int valor){
+    if (valor < 0){
+        (*MV).registros[8] |= 0x80000000; // Si el If da 1, es negativo, Activo N (bit 15)
+        (*MV).registros[8] &= ~0x40000000; // Apaga bit Z (bit 14)
     }
     else{
-        if(opA==0){
-            (*MV).registros[8] |= 0x4000; // Si el If da 1, es cero, Activo Z (bit 14)
-            (*MV).registros[8] &= ~0x8000;// Apaga bit N (bit 15)
+        if(valor==0){
+            (*MV).registros[8] |= 0x40000000; // Si el If da 1, es cero, Activo Z (bit 14)
+            (*MV).registros[8] &= ~0x80000000;// Apaga bit N (bit 15)
+        }
+        else{
+            (*MV).registros[8] = 0;
         }
     }
 }
@@ -587,7 +768,7 @@ void Disassembler(mv* MV){
         char instruccion = (*MV).memoria[(*MV).registros[5]];
         //Ya se mostro la orden, ahora se procede a mostrar los operandos
         char tipoA = (instruccion >> 4) & 0x3, operacion = instruccion & 0x1F,tipoB = (instruccion >> 6) & 0x3;
-        int operandoA, operandoB;
+        int operandoA, operandoB, i;
 
         //El tamaño y el tipo son iguales
         FuncOperandos[tipoB](*MV, &cont, &operandoB);
@@ -616,41 +797,53 @@ void Disassembler(mv* MV){
                     operandoB &= 0x00FFFFFF;
                 else
                     operandoB = 0;
-        
-        if(tipoA != 0){
-            unsigned char a;
-            for(int i=0; i<tipoA; i++){
-                a = (operandoA >> (i*8)) & 0x00FF;
-                printf("%02X ", a);
-            }
+
+        //primer parte del formato
         if(tipoB != 0){
             unsigned char b;
-            for(int i=0; i<tipoB; i++){
-                b = (operandoB >> (i*8)) & 0x00FF;
+            for(i=tipoB; i>0; i--){
+                b = (operandoB >> ((i-1)*8)) & 0x00FF;
                 printf("%02X ", b);
             }
         }
+        if(tipoA != 0){
+            unsigned char a;
+            
+            for(i=tipoA; i>0; i--){
+                a = (operandoA >> ((i-1)*8)) & 0x00FF;
+                printf("%02X ", a);
+            }
         }
+        for(i=tipoB + tipoA; i<7; i++){
+            printf("   ");
+        }
+        printf("|");
 
 
-        printf(" | %s" , nomFun[instruccion & 0x1F]);
-        /* Si es un registro cont va aumentar 1, y saldra el byte con el registro y el sector
-        Si es un inmediato sale directamente con el inmediato
-        Si es memoria, cont aumenta 2 y sale el inmediato y el registro en el entero
-        */
-        
+        //
+        printf(" %s" , nomFun[instruccion & 0x1F]);
         if(tipoA == 2)
-            printf(" %d ", operandoA);
+            printf(" %d, ", operandoA);
             else
             if(tipoA == 1)
-                printf(" %s ", EscrReg(*MV, operandoA));
+                printf(" %s, ", EscrReg(*MV, operandoA));
             else
                 if(tipoA == 3)
-                    printf(" %s ", EscrMem(*MV, operandoA));
+                    printf(" %s, ", EscrMem(*MV, operandoA));
                 else
-                    printf(" ");
-        if(tipoB == 2)
-            printf(" %d ", operandoB);
+                    printf("");
+        if(tipoB == 2){
+            short int valor;
+            if (operandoB & 0x8000){
+                valor =  (~operandoB) + 1;   //Preguntar
+                printf(" -%d ", valor);
+            }
+            else{
+                valor = operandoB;
+                printf(" %d ", valor);
+            }
+            
+        }
             else
             if(tipoB == 1)
                 printf (" %s ", EscrReg(*MV, operandoB));
@@ -658,7 +851,7 @@ void Disassembler(mv* MV){
                 if(tipoB == 3)
                     printf (" %s ", EscrMem(*MV, operandoB));
                 else
-                    printf("  ");
+                    printf("");
         printf("\n");
 
        //printf("[%x] %x     |    %s , %s ", (*MV).registros[5],(), instruccion, escritura(A), escritura(B));
@@ -695,7 +888,6 @@ char* EscrReg(mv MV, int operando){
             break;
     }
     return palabra;
-    //Nunca voy a entender los strings en C
 }
 
 char* EscrMem(mv MV, int operando){
@@ -709,5 +901,3 @@ char* EscrMem(mv MV, int operando){
     //palabra = "[%x + %d]", bytesReg, inmeidato;
     return palabra;
 }
-
-        

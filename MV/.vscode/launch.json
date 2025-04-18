@@ -4,7 +4,7 @@
             "name": "(gdb) Launch",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/InicioMV/PrimerCodigo.exe",
+            "program": "${workspaceFolder}/InicioMV/a.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
