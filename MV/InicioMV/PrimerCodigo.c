@@ -115,7 +115,7 @@ void CargaRegistros(mv* MV, int tamCS){
 void lectura(mv* MV, char* argv[]){
 
     FILE *arch = fopen(argv[1], "rb");
-    //FILE *arch = fopen("lectura_escritura_char41.vmx", "rb");
+    //FILE *arch = fopen("c:/Users/Octii/Desktop/Maquina_Virtual_1/pruebalau.vmx", "rb");
     if( arch != NULL){
         fread((*MV).memoria, sizeof(char), 8, arch); //Se leen bytes de forma arbitraria, los primeros 7 son el header, siendo los ultimos 2 el tamaño
         char* cabecera = "VMX25";
@@ -439,9 +439,9 @@ void set(mv* MV, int opA, char tipoA, int valorB){
     void LDH (mv* MV, int opA, int opB, char operacion){
         int valorA = ValoropST((operacion>>4)&0x3, opA, MV);
         int valorB = ValoropST((operacion>>6)&0x3, opB, MV);
-
-        valorA=valorA & 0xFFFF0000; //quedaria 11111111 11111111 000000....
-        valorA=valorA | (valorB & 0x0000FFFF);
+        //los 2 bytes mas sign del primero con los 2 bytes menos sign del segundo
+        valorA=valorA & 0x0000FFFF; //quedaria 11111111 11111111 000000....
+        valorA=valorA | ((valorB << 16 )& 0xFFFF0000);
 
         set(MV, opA, (operacion>>4)&0x3 ,valorA);
     }
@@ -449,9 +449,10 @@ void set(mv* MV, int opA, char tipoA, int valorB){
     void LDL (mv* MV, int opA, int opB, char operacion){
         int valorA = ValoropST((operacion>>4)&0x3, opA, MV);
         int valorB = ValoropST((operacion>>6)&0x3, opB, MV);
-
-        valorA=opA<<16;
+        //los 2 menos sign del primero con los dos menos sign del segundo
+        valorA=valorA & 0xFFFF0000;
         valorA= valorA | (opB & 0x0000FFFF);
+
         set(MV, opA, (operacion>>4)&0x3 ,valorA);
     }
 
@@ -571,6 +572,7 @@ void SYS (mv* MV, int opA, int opB, char operacion){
     short int AL = getReg(*MV, 10, 3);  //Aca se almacena el formato
 
     punteroReg(*MV, dirReg, &puntEdx);    //Se extrae la direccion de memoria a la que apunta edx
+    //Puede ocurrir que la direccion de EDX sea negativa, entiendo hay que quitarle el signo
 
     //Hasta aca todo claro
     printf("\n CL: %d,  CH: %d, AL: %d \n", CL, CH, AL);
@@ -667,10 +669,7 @@ void SYSW(mv* MV, int punt, char CH, char CL, short int AL){
 void EscrFormato(mv* MV, int i,int punt, short int AL, char CH){
     int escritura = 0;
     char* cadenaBits = malloc(CH*8 + 1);
-    for (int j=0; j<CH*8; j++){
-        cadenaBits[j] = '0';
-    }
-    cadenaBits[CH*8] = '\0';
+    
 
     printf("[%04X]      ", punt - (*MV).TSeg[1].Base + i*CH);
 
@@ -702,6 +701,10 @@ void EscrFormato(mv* MV, int i,int punt, short int AL, char CH){
         printf("Escritura en binario\n");
         char bit;
         int j;
+        for (int j=0; j<CH*8; j++){
+            cadenaBits[j] = '0';
+        }
+        cadenaBits[CH*8] = '\0';
         //printf("%d", MV.memoria[punt + i]);
         for(j=0; j<CH; j++){
             escritura |= (*MV).memoria[punt + i*CH + j] << ((CH-1-j)*8);
@@ -896,8 +899,17 @@ char* EscrMem(mv MV, int operando){
     short int inmediato=0;
 
     registro = operando & 0x000000FF;
-    inmediato = (operando >> 8) & 0x000000FF;
-    snprintf(palabra, sizeof(palabra), "[%s + %d]", EscrReg(MV, registro), inmediato);
+    inmediato = (operando >> 8);
+    if(inmediato > 0){
+        snprintf(palabra, sizeof(palabra), "[%s + %d]", EscrReg(MV, registro), inmediato);
+        inmediato &= 0x0000FFFF; //Atento a esto que no me da seguridad
+    }
+    else if(inmediato < 0){
+        inmediato = (~inmediato) + 1;
+        snprintf(palabra, sizeof(palabra), "[%s - %d]", EscrReg(MV, registro), inmediato);
+    }
+    else
+        snprintf(palabra, sizeof(palabra), "[%s]", EscrReg(MV, registro));
     //palabra = "[%x + %d]", bytesReg, inmeidato;
     return palabra;
 }
