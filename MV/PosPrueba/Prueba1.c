@@ -77,7 +77,6 @@ int main(int argc, char *argv[]){
     mv MV; //Variable maquina virtual
     lectura (&MV, argv); //Llamada a la funcion lectura
     LeeCS(&MV);
-
     printf("\n");
     if(strcmp(argv[2],"-d") == 0)
         Disassembler(&MV);
@@ -113,7 +112,7 @@ void CargaRegistros(mv* MV, int tamCS){
 void lectura(mv* MV, char* argv[]){
 
     FILE *arch = fopen(argv[1], "rb");
-    //FILE *arch = fopen("Sample4.vmx", "rb");
+    //FILE *arch = fopen("Sample6.vmx", "rb");
     if( arch != NULL){
         fread((*MV).memoria, sizeof(char), 8, arch); //Se leen bytes de forma arbitraria, los primeros 7 son el header, siendo los ultimos 2 el tamaño
         char* cabecera = "VMX25";
@@ -211,7 +210,7 @@ void SACAREGISTRO (mv MV,int *cont, int *bytesOp){
 
 void INMEDIATO (mv MV,int *cont, int *op){
   short int inmediato = 0;
-  inmediato = MV.memoria[MV.registros[5]+*cont + 2];
+  inmediato = MV.memoria[MV.registros[5]+*cont + 2] &0x00FF;
   inmediato = (MV.memoria[MV.registros[5]+*cont + 1] << 8) | inmediato;
   *op = 0;
   *op = inmediato;
@@ -427,7 +426,7 @@ void set(mv* MV, int opA, char tipoA, int valorB){
         int valorB = ValoropST((operacion>>6)&0x3, opB, MV);
         //los 2 bytes mas sign del primero con los 2 bytes menos sign del segundo
         valorA=valorA & 0x0000FFFF; //quedaria 11111111 11111111 000000....
-        valorA=valorA | ((valorB & 0xFFFF0000) << 16);
+        valorA=valorA | ((valorB & 0x0000FFFF) << 16);
 
         set(MV, opA, (operacion>>4)&0x3 ,valorA);
     }
@@ -658,7 +657,7 @@ void EscrFormato(mv* MV, int i,int punt, short int AL, char CH){
     printf("[%04X]      ", punt + i*CH);
     if((AL & 0x01) == 1){
         for(int j=0; j<CH; j++){
-            escritura |= (*MV).memoria[punt + i*CH + j] << ((CH-1-j)*8);
+            escritura |= ((*MV).memoria[punt + i*CH + j]&0x00FF) << ((CH-1-j)*8);
         }
         printf("  %d  ", escritura);
         stop = 0;
@@ -676,18 +675,25 @@ void EscrFormato(mv* MV, int i,int punt, short int AL, char CH){
         stop = 0;
     }
     if((AL & 0x04) == 4){
+        escritura = 0;
+        printf("  0o");
         for(int j=0; j<CH; j++){
-            printf("  0o%o  ", (*MV).memoria[punt + i*CH + j]);
+            escritura = escritura | ((*MV).memoria[punt + i*CH + j] & 0x00FF) << ((CH-1-j)*8);
         }
+        printf("%0o  ", escritura );
         stop = 0;
     }
     if((AL & 0x08) == 8){
+        escritura = 0;
+        printf("  0x");
         for(int j=0; j<CH; j++){
-            printf("  0x%x  ", (*MV).memoria[punt + i*CH + j]);
+            escritura = escritura | ((*MV).memoria[punt + i*CH + j] & 0x00FF) << ((CH-1-j)*8);
         }
+        printf("%08X  ", escritura );
         stop = 0;
     }
     if((AL & 0x10) == 16){
+        escritura = 0;
         char bit;
         int j;
         for (int j=0; j<CH*8; j++){
@@ -696,7 +702,7 @@ void EscrFormato(mv* MV, int i,int punt, short int AL, char CH){
         cadenaBits[CH*8] = '\0';
         
         for(j=0; j<CH; j++){
-            escritura |= (*MV).memoria[punt + i*CH + j] << ((CH-1-j)*8);
+            escritura |= (*MV).memoria[punt + i*CH + j]&0x00FF << ((CH-1-j)*8);
         }
         j=0;
         while(abs(escritura)>1){
@@ -755,8 +761,8 @@ void Disassembler(mv* MV){
     int cont=0; //Este contador es para saber cuantos bytes se leyeron
     (*MV).registros[5]=(*MV).TSeg[0].Base; //IP = CS
 
+    printf("Base: %d, Tamanio: %d \n", (*MV).registros[5], (*MV).TSeg[0].Tamanio);
     char* nomFun[32] = {"SYS","JMP","JZ","JP","JN","JNZ","JNP","JNN","NOT","","","","","","","STOP","MOV","ADD","SUB","SWAP","MUL","DIV","CMP","SHL","SHR","AND","OR","XOR","LDL","LDH","RND"};
-
     while((*MV).registros[5] < ((*MV).TSeg[0].Base + (*MV).TSeg[0].Tamanio)){
         char instruccion = (*MV).memoria[(*MV).registros[5]];
         //Ya se mostro la orden, ahora se procede a mostrar los operandos
@@ -809,6 +815,7 @@ void Disassembler(mv* MV){
                 a = (operandoA >> ((i-1)*8)) & 0x00FF;
                 printf("%02X ", a);
             }
+
         }
         for(i=tipoB + tipoA; i<7; i++){
             printf("   ");
