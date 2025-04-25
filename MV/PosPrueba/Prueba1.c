@@ -112,7 +112,7 @@ void CargaRegistros(mv* MV, int tamCS){
 void lectura(mv* MV, char* argv[]){
 
     FILE *arch = fopen(argv[1], "rb");
-    //FILE *arch = fopen("Sample6.vmx", "rb");
+    //FILE *arch = fopen("Sample1.vmx", "rb");
     if( arch != NULL){
         fread((*MV).memoria, sizeof(char), 8, arch); //Se leen bytes de forma arbitraria, los primeros 7 son el header, siendo los ultimos 2 el tamaño
         char* cabecera = "VMX25";
@@ -375,48 +375,41 @@ void set(mv* MV, int opA, char tipoA, int valorB){
     }
 
     void JMP (mv* MV, int opA, int opB, char operacion){
-        //JMP
         (*MV).registros[5] = opB;
     }
 
     void JZ (mv* MV, int opA, int opB, char operacion){
-        //JZ
         if ((*MV).registros[8] == 0x40000000 ){ //CC
             (*MV).registros[5] = opB; //IP
         }
     }
 
     void JP(mv* MV, int opA, int opB, char operacion){
-        if (((*MV).registros[8] == 0x80000000) && ((*MV).registros[8] == 0x40000000)) {
+        if (((*MV).registros[8] == 0)) {
             (*MV).registros[5] = opB; // IP
         }
     }
 
     void JN (mv* MV, int opA, int opB, char operacion){
-            
         if (((*MV).registros[8]) == 0x80000000){ //CC
             (*MV).registros[5] = opB; //IP
         }
     }
 
     void JNZ (mv* MV, int opA, int opB, char operacion){
-        if ((*MV).registros[8] == 0){ //CC
+        if ((*MV).registros[8] != 0x40000000){ //CC
             (*MV).registros[5] = opB; //IP
         }
     }
 
     void JNP (mv* MV, int opA, int opB, char operacion){
-        //JN
-        
-        if ((((*MV).registros[8]) == 0x80000000 &&  (*MV).registros[8] == 0x40000000) || ((*MV).registros[8]) == 0x80000000 &&  (*MV).registros[8] == 0x40000000){ //CC
+        if ((*MV).registros[8] != 0){ //CC
             (*MV).registros[5] = opB; //IP
         }
     }
 
     void JNN (mv* MV, int opA, int opB, char operacion){
-        //JN
-
-        if (((*MV).registros[8]) == 0x80000000){ //CC
+        if (((*MV).registros[8]) != 0x80000000){ //CC
             (*MV).registros[5] = opB; //IP
         }
     }
@@ -451,7 +444,7 @@ void set(mv* MV, int opA, char tipoA, int valorB){
         int valor= ValoropST(tipoA, opA, MV) & ValoropST(tipoB, opB, MV);
         set(MV, opA, (operacion>>4)&0x3 ,valor);
 
-        CAMBIACC(MV,opA);
+        CAMBIACC(MV,valor);
     }
 
     void OR (mv* MV, int opA, int opB, char operacion){
@@ -459,7 +452,7 @@ void set(mv* MV, int opA, char tipoA, int valorB){
         char tipoB=(operacion>>6) & 0x3;
         int valor= ValoropST(tipoA, opA, MV) | ValoropST(tipoB, opB, MV);
         set(MV, opA, (operacion>>4)&0x3 ,valor);
-        CAMBIACC(MV,opA);
+        CAMBIACC(MV,valor);
     }
 
     void XOR (mv* MV, int opA, int opB, char operacion){
@@ -467,7 +460,7 @@ void set(mv* MV, int opA, char tipoA, int valorB){
         char tipoB=(operacion>>6) & 0x3;
         int valor= ValoropST(tipoA, opA, MV) ^ ValoropST(tipoB, opB, MV);
         set(MV, opA, (operacion>>4)&0x3 ,valor);
-        CAMBIACC(MV,opA);
+        CAMBIACC(MV,valor);
     }
 
     void STOP(mv* MV, int opA, int opB, char operacion){
@@ -730,14 +723,15 @@ void EscrFormato(mv* MV, int i,int punt, short int AL, char CH){
 
 ///////
 void CAMBIACC (mv* MV, int valor){
+    (*MV).registros[8] &= 0x00000000; //Apaga los bits de estado
     if (valor < 0){
         (*MV).registros[8] |= 0x80000000; // Si el If da 1, es negativo, Activo N (bit 15)
-        (*MV).registros[8] &= ~0x40000000; // Apaga bit Z (bit 14)
+        //(*MV).registros[8] &= ~0x40000000; // Apaga bit Z (bit 14)
     }
     else{
         if(valor==0){
             (*MV).registros[8] |= 0x40000000; // Si el If da 1, es cero, Activo Z (bit 14)
-            (*MV).registros[8] &= ~0x80000000;// Apaga bit N (bit 15)
+            //(*MV).registros[8] &= ~0x80000000;// Apaga bit N (bit 15)
         }
         else{
             (*MV).registros[8] = 0;
