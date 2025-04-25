@@ -111,8 +111,8 @@ void CargaRegistros(mv* MV, int tamCS){
 
 void lectura(mv* MV, char* argv[]){
 
-    FILE *arch = fopen(argv[1], "rb");
-    //FILE *arch = fopen("Sample1.vmx", "rb");
+    //FILE *arch = fopen(argv[1], "rb");
+    FILE *arch = fopen("Sample8.vmx", "rb");
     if( arch != NULL){
         fread((*MV).memoria, sizeof(char), 8, arch); //Se leen bytes de forma arbitraria, los primeros 7 son el header, siendo los ultimos 2 el tamaño
         char* cabecera = "VMX25";
@@ -128,8 +128,9 @@ void lectura(mv* MV, char* argv[]){
             STOP(MV, 0, 0, 0); //Error
         }
         
-        int tamCS = ((*MV).memoria[6] << 8 )| (*MV).memoria[7];
+        int tamCS = (((*MV).memoria[6]&0x00FF) << 8 )| ((*MV).memoria[7] & 0x00FF);
         //Vector de registros
+        
         CargaRegistros(MV, tamCS);
         fread((*MV).memoria,sizeof(char),tamCS,arch);
         fclose(arch);
@@ -167,7 +168,7 @@ void LeeCS (mv *MV){
         cont++;
         IPaux= IPaux + cont;
         cont = 0;
-
+        
         (*MV).registros[5]=IPaux; //Graba en el IP la proxima instruccion a leer
         
         if(operacion >= 0x0 & operacion <= 0x8)//Solo un operando
@@ -256,7 +257,7 @@ void EMPTY(mv* MV, int opA, int opB, char operacion){
 
 void setMemoria(mv* MV, int posMem, int valorB){
     for(int i=3; i>=0; i--){
-        (*MV).memoria[posMem+i] = (valorB >> ((3-i)*8)) & 0xFF;
+        (*MV).memoria[posMem+i] = (valorB >> ((3-i)*8)) & 0x00FF;
     }
 }
 
@@ -293,7 +294,7 @@ int ValoropST(int tipo, int op, mv* MV){ //Valor operando Segun Tipo
             break;
         case 3:
             for (i=0; i<4; i++){
-                valor = (valor << 8) | (*MV).memoria[op+i];
+                valor = (valor << 8) | (*MV).memoria[op+i] & 0x00FF;
             }
             return valor;
             break;
@@ -589,7 +590,8 @@ void leeFormato(mv MV, int *lectura, int AL, char CH){
     switch (AL)
     {
     case 0x01://decimal, se lee y se guarda en CH bytes
-        scanf("%d", lectura);
+        //scanf("%d", lectura);
+        lectura = 1;
         break;
     case 0x02: //caracteres, se leen CH char
         scanf("%s", Cadena);
@@ -602,7 +604,7 @@ void leeFormato(mv MV, int *lectura, int AL, char CH){
     case 0x08: //Hexadecimal
         scanf("%x", lectura);
         break;
-    case 0x10: //Binario, dios me ampare
+    case 0x10:
         cadenaBin = malloc(CH*8);
         scanf("%s", cadenaBin);
         valor = 0;
@@ -755,7 +757,6 @@ void Disassembler(mv* MV){
     int cont=0; //Este contador es para saber cuantos bytes se leyeron
     (*MV).registros[5]=(*MV).TSeg[0].Base; //IP = CS
 
-    printf("Base: %d, Tamanio: %d \n", (*MV).registros[5], (*MV).TSeg[0].Tamanio);
     char* nomFun[32] = {"SYS","JMP","JZ","JP","JN","JNZ","JNP","JNN","NOT","","","","","","","STOP","MOV","ADD","SUB","SWAP","MUL","DIV","CMP","SHL","SHR","AND","OR","XOR","LDL","LDH","RND"};
     while((*MV).registros[5] < ((*MV).TSeg[0].Base + (*MV).TSeg[0].Tamanio)){
         char instruccion = (*MV).memoria[(*MV).registros[5]];
