@@ -1,0 +1,183 @@
+PROTOTIPO
+PUSH <*char>
+CALL operar
+ADD sp, 4
+
+                   suma equ 43
+                   resta equ 45
+                   division equ 47
+                   multiplicacion equ 42
+operar:            PUSH bp
+                   MOV bp, sp
+                   PUSH eax
+                   PUSH ebx        
+                   PUSH ecx       
+                   PUSH edx        
+                   PUSH eex      
+                   PUSH efx 
+                   
+
+                   PUSH [bp + 8]
+                   CALL recorrerHastaFinNro
+                   ADD sp, 4
+
+                   ; en eax tengo cont
+                   ; en ecx tengo puntero a fin
+
+                   PUSH eax
+                   PUSH [bp + 8]
+                   CALL leerNumero
+                   ADD sp, 8
+                   ; en efx tengo valor int
+                  
+                   MOV edx, efx       ; guardo valor de primer operando                   
+                                      
+                   ADD ecx, 4          ; me paro sobre operador
+                   MOV eex, [ecx]      ; almaceno operador
+                   ADD ecx, 4          ; me paro sobre siguiente numero
+                   
+                   MOV ebx, ecx
+                   PUSH ebx
+                   CALL recorrerHastaFinNro
+                   ADD sp, 4
+
+                   ; en eax tengo cont
+                   ; en ecx tengo puntero a fin
+
+                   PUSH eax
+                   PUSH ebx
+                   CALL leerNumero
+                   ADD sp, 8
+                   ; en efx tengo valor int
+                  
+                   ; tengo primer op en edx
+                   ; segundo op en efx
+                   ; operador en eex
+
+                   CMP eex, suma
+                   JZ suma
+
+                   CMP eex, resta
+                   JZ resta
+
+                   CMP eex, division
+                   JZ division
+
+                   MUL edx, efx
+                   JMP resultado
+suma:              SUM edx, efx
+                   JMP resultado
+resta:             SUB edx, efx
+                   JMP resultado
+division:          DIV edx, efx
+
+                   ; funcion que deberia haber hecho en el punto 3b
+resultado:         PUSH edx
+                   CALL convertirIntString
+                   ADD sp, 4
+                   ; devuelve en eax un puntero al string
+
+                   MOV edx, eax
+                   PUSH edx
+                   CALL recorrerHastaFinNro
+                   ADD sp, 4
+                   ; devuelve en eax contador
+                   ; devuelve en ecx puntero al final
+
+                   MOV CL, eax
+                   MOV CH, 1
+                   MOV AL, 01
+                   SYS 01 ; o 02 no me acuerdo
+
+fin:               POP efx
+                   POP eex
+                   POP edx
+                   POP ecx
+                   POP ebx
+                   POP eax
+                   MOV sp, bp
+                   POP bp
+                   RET
+
+----------------- Funcion leer numero -------------
+PROTOTIPO
+PUSH <*char>
+PUSH <int>
+CALL leerNumero
+ADD sp, 4
+; devuelve en efx el valor int
+
+                   terminator equ 0
+                   espacio equ 32
+
+leerNumero:        PUSH bp
+                   MOV bp, sp
+                   PUSH eax           ; contador
+                   PUSH ebx           ; puntero
+                   PUSH ecx           ; aux caracter
+
+                   MOV ebx, [bp + 12]
+                   MOV eax, [bp + 8]
+
+                   PUSH 10
+                   PUSH eax
+                   CALL potencia
+                   ADD sp, 8
+
+                   ; en eax tengo resultado (1, 10, 1000, 10000 ...)
+                   
+                   MOV efx, 0            ; preparo respuesta final
+
+conversion:        MOV ecx, [ebx]        ; consigo caracter
+                   ADD ebx, 4            ; avanzo puntero
+                   SUB ecx, 48           ; lo convierto a int
+                   MUL ecx, eax          ; multiplico
+                   ADD efx, ecx          ; actualizo resultado final
+                   DIV eax, 10         
+                   CMP eax, 0.1          ; si ya llegue al final 
+                   JZ finConversion
+                   JMP conversion        ; sino
+
+finConversion:     POP ecx
+                   POP ebx
+                   POP eax
+                   MOV sp, bp
+                   POP bp
+                   RET
+
+
+-------------- funcion recorrer hasta fin de numero ------------
+PROTOTIPO
+PUSH <*char>
+CALL recorrerHastaFinNro
+ADD sp, 4
+; devuelve en eax contador de digitos
+; devuelve en ecx puntero al final del numero
+
+                     terminator equ 0
+                     espacio equ 32
+
+recorrerHastaFinNro: PUSH bp
+                     MOV bp, sp                  
+
+                     MOV ecx, [bp + 8]
+                     MOV eax, 0
+
+loop:                CMP [ecx], terminator
+                     JZ fin
+                     CMP [ecx], espacio
+                     JZ fin
+
+                     ADD ecx, 4
+                     ADD eax, 1
+                     JMP loop
+
+fin:                 MOV sp, bp
+                     POP bp
+                     RET
+                   
+                   
+                   
+                   
+
+                   

@@ -1,0 +1,5 @@
+# depslib dependency file v1.0
+1710127804 source:c:\users\maite\desktop\ingenieria en informatica\3 año\arquitectura de computadoras\tps\tp1\punto20\main.c
+	<stdio.h>
+	<stdlib.h>
+

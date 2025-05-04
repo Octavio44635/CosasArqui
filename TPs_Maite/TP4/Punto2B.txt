@@ -1,0 +1,38 @@
+PROTOTIPO SCPY
+PUSH <*char original>
+PUSH <*char copia>
+CALL scpy
+ADD sp, 8
+
+                   terminator equ 0
+                   null equ -1
+scpy:              PUSH bp
+                   MOV bp, sp
+              
+                   PUSH ebx;
+                   PUSH ecx;
+
+                   CMP [bp + 12], null
+                   JZ scpy_fin
+
+                   MOV ebx, [bp + 8]; *char copia
+                   MOV ecx, [bp + 12] ; *char original
+                   
+                   MOV [ebx], [ecx] ; copio valor original en direcc memoria de copia
+                   
+                   ADD ebx, 4 ; apunto al siguiente espacio
+                   ADD ecx, 4 ; apunto al siguiente caracter a copiar
+                   
+                   CMP [bp + 12], terminator
+                   JZ scpy_fin
+
+                   PUSH ecx
+                   PUSH ebx
+                   CALL scpy
+                   ADD sp, 8
+   
+scpy_fin:          POP ecx
+                   POP ebx
+                   MOV sp, bp
+                   POP bp
+                   RET

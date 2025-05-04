@@ -1,0 +1,32 @@
+FUNCION CREAR_NODO
+PUSH <dato>
+CALL crear_nodo
+ADD sp, 4
+
+               null equ -1
+               size_nodo equ 8
+               dato equ 0
+               sig equ 4
+
+crear_nodo:    PUSH BP
+               MOV bp, sp
+               PUSH ebx
+
+               MOV ebx, [bp + 8]
+               
+               ; llamo a alloc para reservar espacio para nodo
+               PUSH size_nodo
+               CALL alloc
+               ADD sp, 4
+               ; devuelve en eax el puntero al nodo
+
+               ; inicializo el nodo
+               MOV [eax + dato], ebx
+               MOV [eax + sig], null
+
+               MOV sp, bp
+               POP bp
+               RET
+               
+               
+                              

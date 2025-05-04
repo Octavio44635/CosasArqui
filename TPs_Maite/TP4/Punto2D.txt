@@ -1,0 +1,35 @@
+PROTOTIPO SCAT
+PUSH <*char 1>
+PUSH <*char 2>
+CALL scat
+ADD sp, 8
+
+                   terminator equ 0
+scat:              PUSH bp
+                   MOV bp, sp
+                   PUSH ebx
+                   PUSH ecx
+
+                   MOV ebx, [bp + 8]       ; *char 2
+                   MOV ecx, [bp + 12]      ; *char 1
+
+loop_1:            CMP [ecx], terminator  ; loop hasta llegar a fin de string 1
+                   JZ loop_2
+
+                   ADD ecx, 4
+                   JMP loop_1
+
+loop_2:            CMP [ebx], terminator   ; loop hasta llegar a fin de string 2
+                   JZ scat_fin
+
+                   MOV [ecx], [ebx]        ; agrego caracter de string 2 a string 1
+                   ADD ecx, 4
+                   ADD ebx, 4
+                   
+                   JMP loop_2
+
+scat_fin:          POP ecx
+                   POP ebx
+                   MOV sp, bp
+                   POP bp
+                   RET

@@ -1,0 +1,76 @@
+----------------------- function calculo -----------------------
+
+Prototipo
+PUSH <*int>
+PUSH <int>
+CALL calculo
+ADD sp, 8
+
+_start:        MOV ebx, 3     ; j (nose is esta bien aca)
+               CALL main
+
+calculo:       PUSH bp
+               MOV bp, sp
+               PUSH eax
+               PUSH ebx
+               PUSH ecx    
+
+               MOV eax, [bp + 8]       ; int (j)
+               MOV ebx, [bp + 12]      ; puntero a vector
+               MOV ecx, [ebx]          ; valor de v[0]
+
+               ; Apunto el puntero al indice del vector ingresado
+               MUL eax, 4      ; consigo distancia en bits
+               ADD ebx, eax    ; aumento la direccion de memoria
+
+               ; consigo puntero al elemento anterior en EAX
+               MOV eax, ebx
+               SUB eax, 4
+
+               ; hago el calculo 
+               MOV [ebx], [eax]  ; vec[x] = vec[x - 1]
+               AND [ebx], ecx   ; vec[x] & vec[0]
+
+               POP ecx
+               POP ebx
+               POP eax
+               MOV sp, bp
+               POP bp
+               RET
+
+main:          PUSH bp
+               MOV bp, sp
+               
+               SUB sp, 20                ; guardo 5 * 4 bits de espacio para el vector
+               MOV eax, bp
+               SUB eax, 20               ; puntero a arreglo[0]
+               MOV [eax], 1024           ; arreglo[0] = 1024
+               MOV [bp - 16], [eax]      ; arreglo[1] = arreglo[0]
+               OR [bp - 16], 0x3FF       ; arreglo[0] | 0x3FF
+
+               ; llamanda a calculo
+               PUSH eax
+               PUSH ebx   ; j
+               CALL calculo
+               ADD sp, 8
+
+               STOP
+
+               
+               
+              
+
+               
+            
+               
+               
+
+               
+
+
+
+
+
+
+
+

@@ -1,0 +1,67 @@
+PROTOTIPO
+PUSH <*char>
+CALL convertirAint
+ADD sp, 4
+; devuelve en eax el valor int
+
+                   terminator equ 0
+                   signoMenos equ 45
+convertirAint:     PUSH bp
+                   MOV bp, sp
+                   PUSH ebx        ; puntero a char
+                   PUSH ecx        ; contador
+                   PUSH edx        ; aux para caracteres
+                   PUSH eex        ; flag para negativo
+
+                   MOV eex, 0
+                   MOV ecx, 1             ; contador de cantidad de digitos
+                   MOV ebx, [bp + 8]
+                   CMP [ebx], signoMenos
+                   JNZ recorrerIda
+                   MOV eex, 1
+
+recorrerIda:       CMP [ebx], terminator
+                   JZ finString
+
+                   ADD ecx, 1             ; incremento contador
+                   ADD ebx, 4             ; muevo puntero
+                   JMP recorrerIda
+
+finString:         MOV ebx, [bp + 8]      ; vuelvo a primer caracter
+                   
+                   ; funcion potencia iterativa punto 1 guia 4
+                   PUSH 10
+                   PUSH ecx
+                   CALL potencia
+                   ADD SP, 8
+
+                   MOV ecx, eax           ; ecx lleva 10 elevado a la cntidad de digitos
+                   MOV eax, 0
+
+loop:              MOV edx, [ebx]         ; consigo caracter
+                   ADD ebx, 4             ; apunto a siguiente caracter
+                   SUB edx, 48            ; convierto caracter  numero
+                   
+                   MUL edx, ecx
+                   ADD eax, edx
+                   DIV ecx, 10
+
+                   CMP ecx, 0.1
+                   JZ negativo
+                   JMP loop
+                   
+
+negativo:          CMP eex, 1         ; si es negativo
+                   JNZ fin            
+                   MUL eax, -1          ; multiplico por -1
+fin:               POP eex
+                   POP edx
+                   POP ecx
+                   POP ebx
+                   MOV sp, bp
+                   POP bp
+                   RET
+
+
+
+                   

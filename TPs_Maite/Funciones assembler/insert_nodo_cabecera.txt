@@ -1,0 +1,30 @@
+FUNCION INSERT_NODO EN CABECERA
+PUSH <nodo*>
+PUSH <nodo**>
+CALL insert_nodo
+ADD sp, 8
+
+
+               null equ -1
+               dato equ 0
+               sig equ 4
+               size_nodo equ 8
+
+insert_nodo:   PUSH bp
+               MOV bp, sp
+               PUSH edx
+               PUSH ebx
+
+               MOV edx, [bp + 8]   ; guardo head
+               MOV ebx, [bp + 12]  ; guardo puntero a nodo
+
+               MOV [ebx + sig], [edx]
+               MOV [edx], ebx
+
+               POP ebx
+               POP edx
+               MOV sp, bp
+               POP bp
+               RET
+
+               

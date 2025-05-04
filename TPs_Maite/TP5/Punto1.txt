@@ -1,0 +1,39 @@
+--------------------- a ---------------------
+
+PUSH [bp - 12]   ; c
+PUSH [bp - 8]    ; b
+PUSH [bp - 4]    ; a
+CALL proce
+ADD sp, 12
+
+--------------------- b ---------------------
+
+MOV eax, bp       ; eax guarda lo mismo que bp
+SUB eax, 4        ; eax guarda la direccion de memoria de a
+
+PUSH [bp - 8]    ; b
+PUSH eax         ; a (PUSH (ebx - 4))
+CALL func
+ADD sp, 8
+; devuelve en eax el valor
+
+MOV ecx, [bp]
+SUB ecx, 12
+MOV [ecx], eax
+
+--------------------- c ---------------------
+
+MOV ebx, bp
+MOV ecx, bp    ; ebx guarda la direccion de memoria de b
+
+SUB ebx, 8
+SUB ecx, 12    ; ecx guarda la direccion de memoria de c
+
+MOV eax, bp
+SUB eax, 4     ; eax guarda la direccion de memoria de a
+
+PUSH ecx     ; envio direccion de puntero c
+PUSH ebx     ; envio direccion de puntero a b
+PUSH [eax]   ; envio direccion de a 
+CALL proce
+ADD sp, 12

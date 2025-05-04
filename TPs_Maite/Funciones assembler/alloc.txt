@@ -1,0 +1,34 @@
+FUNCION ALLOC
+PUSH <bytes>
+CALL alloc
+ADD sp, 4
+; devuelve en eax la direccion de memoria
+
+
+               SIZE_MEM equ <tamanio>
+               null equ -1
+               
+               MOV [es], es
+               ADD [es], 4
+
+alloc:         PUSH bp
+               MOV bp, sp
+               PUSH ebx
+
+               MOV eax, null       ; inicializo puntero
+               MOV bx, [es]        ; primera direccion libre
+               ADD bx, [bp + 8]    ; adelanto el puntero la cantidad e bytes que pidieron
+
+               CMP bx, SIZE_MEM    ; me fijo si me fui de l memoria
+               JP fin_alloc
+
+               MOV eax, [es]       ; primera direccion libre
+               ADD [es], [bp + 8]  ; 
+
+fin_alloc:     POP ebx
+               MOV sp, bp
+               POP bp
+               RET
+
+               
+               

@@ -1,0 +1,40 @@
+PROTOTIPO SPLIT
+PUSH <*char>
+PUSH <char>
+PUSH <**char>
+CALL split
+ADD sp, 12
+
+                   terminator equ 0
+split:             PUSH bp
+                   MOV bp, sp
+                   PUSH eax
+                   PUSH ebx
+                   PUSH ecx
+
+                   MOV eax, [bp + 8]          ; **char (array punteros)
+                   MOV ebx, [bp + 12]         ; char  (caracter) 
+                   MOV ecx, [bp + 16]         ; *char (string)
+
+otro:              CMP [ecx], terminator
+                   JZ split_fin
+
+loop_busqueda:     ADD ecx, 4                 ; apunta al siguiente char
+                   CMP [ecx], ebx
+                   JNZ loop_busqueda
+
+                   MOV [ecx], terminator      ; reemplazo caracter por \0
+                   ADD ecx, 4                 ; avanzo a sig caracter
+                   MOV [eax], [ecx]           ; guardo nueva string en array de punteros
+                   ADD eax, 4                 ; apunto al siguiente puntero
+
+                   JMP otro
+
+split_fin:         MOV [eax], -1              ; como si fuera puntero null
+                   POP ecx
+                   POP ebx
+                   POP eax
+                   MOV sp, bp
+                   POP bp
+                   RET
+
