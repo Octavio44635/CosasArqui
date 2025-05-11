@@ -1,11 +1,30 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
+#define CS 0
+#define DS 1
+#define ES 2
+#define SS 3
+#define KS 4
+#define IP 5
+#define SP 6
+#define BP 7
+#define CC 8
+#define AC 9
+#define EAX 10
+#define EBX 11
+#define ECX 12
 #define EDX 13
+#define EEX 14
+#define EFX 15
+//Cambiar las constantes en todo el codigo
+
+
 #define Tamtot 16384
 #define TamanioRegistros 16
-#define TamanioTablaS 2 //Por el momento
+#define TamanioTablaS 6 //Tamaño maximo = 6
 
 
 typedef struct{
@@ -17,10 +36,10 @@ typedef struct{
 typedef struct{
     char memoria[Tamtot];
     int registros[TamanioRegistros];  //Del elemento 8 al 15 son valores enteros, los demas son referencias a memoria
-    TablaS TSeg[2];} mv;
+    TablaS TSeg[TamanioTablaS];} mv;
 
-void lectura(mv*, char*[]);
-void CargaRegistros(mv*, int);
+void lectura(mv*, char*[], int tamanio);
+void CargaRegistros(mv*, int[], int);
 
 void SYS(mv*,int, int,char );
 void JMP(mv*,int, int,char );
@@ -48,6 +67,8 @@ void XOR(mv*,int, int,char  );
 void LDL(mv*,int, int,char  );
 void LDH(mv*,int, int,char );
 void RND(mv*,int, int,char );
+//Declarar las nuevas funciones
+
 
 void SYSR(mv* , int , char , char, short int);
 void SYSW(mv* , int , char, char, short int );
@@ -76,10 +97,17 @@ void Disassembler(mv*);
 int main(int argc, char *argv[]){
     //Las funciones del vector deben recibir los mismos parametros
 
+    int tamanio = Tamtot;
+    tamanio = buscaParametroTamanio(argc, argv);
     mv MV; //Variable maquina virtual
-    lectura (&MV, argv); //Llamada a la funcion lectura
+    //if(hay .vmx en argv){}
+        lectura (&MV, argv, tamanio); //Llamada a la funcion lectura
+    //else if(solo hay .vmi){}
+    //else if(hay de los dos){}
     LeeCS(&MV);
     printf("\n");
+    //Que busque en el vector, el orden es variable ahora
+
     if(strcmp(argv[2],"-d") == 0)
         Disassembler(&MV);
         
@@ -87,31 +115,55 @@ int main(int argc, char *argv[]){
     return 0;
 }
 
-void CargaRegistros(mv* MV, int tamCS){
+void CargaRegistros(mv* MV, int ArregloTamanios[], int offsetEntry){
+    int j=0, param;
+    int i;
+
+    (*MV).registros[CS] = -1;
+    (*MV).registros[DS] = -1;
+    (*MV).registros[ES] = -1;
+    (*MV).registros[SS] = -1;
+    (*MV).registros[KS] = -1;
+    (*MV).registros[IP] = -1;
+    (*MV).registros[SP] = -1;
+    (*MV).registros[BP] = -1;
+    (*MV).registros[CC] = 0;
+    (*MV).registros[AC] = 0;
+    (*MV).registros[EAX] = 0;
+    (*MV).registros[EBX] = 0;
+    (*MV).registros[ECX] = 0;
+    (*MV).registros[EDX] = 0;
+    (*MV).registros[EEX] = 0;
+    (*MV).registros[EFX] = 0;
+    int suma=0;
+    param = (ArregloTamanios[0] > 0);
+    for(i=0; i<TamanioTablaS; i++){
+
+        if(ArregloTamanios[i] != 0){
+            (*MV).TSeg[j].Base = j;
+            (*MV).TSeg[j].Tamanio = ArregloTamanios[i];
+            j++;
+        }
+
+    }
+    i=(ArregloTamanios[0] > 0);
+    if(ArregloTamanios[KS+1] != 0)
+        (*MV).registros[KS] = (((*MV).TSeg[i++].Base<<16) & 0xFFFF0000) | (ArregloTamanios[KS+1] & 0x0000FFFF);
+    if(ArregloTamanios[CS+1] != 0)
+        (*MV).registros[CS] = (((*MV).TSeg[i++].Base<<16) & 0xFFFF0000) | (ArregloTamanios[CS+1] & 0x0000FFFF);
+    if(ArregloTamanios[DS+1] != 0)
+        (*MV).registros[DS] = (((*MV).TSeg[i++].Base<<16) & 0xFFFF0000) | (ArregloTamanios[DS+1] & 0x0000FFFF);
+    if(ArregloTamanios[ES+1] != 0)
+        (*MV).registros[ES] = (((*MV).TSeg[i++].Base<<16) & 0xFFFF0000) | (ArregloTamanios[ES+1] & 0x0000FFFF);
+    if(ArregloTamanios[SS+1] != 0)
+        (*MV).registros[SS] = (((*MV).TSeg[i++].Base<<16) & 0xFFFF0000) | (ArregloTamanios[SS+1] & 0x0000FFFF);
     
-    (*MV).TSeg[0].Base = 0; //Base CS
-    (*MV).TSeg[0].Tamanio = tamCS; //Tamanio CS
-    (*MV).TSeg[1].Base = tamCS; //Base DS
-    (*MV).TSeg[1].Tamanio = Tamtot - tamCS; //Tamanio DS
+    
+    (*MV).registros[IP]=(*MV).registros[CS] | offsetEntry; // Inicializacion IP
 
-    (*MV).registros[0] = 0x0;
-    (*MV).registros[1] = 0x0;
-    (*MV).registros[10] = 0x0;
-    (*MV).registros[11] = 0x0;
-    (*MV).registros[12] = 0x0;
-    (*MV).registros[13] = 0x0;
-    (*MV).registros[14] = 0x0;
-    (*MV).registros[15] = 0x0;
-
-    (*MV).registros[1] = (*MV).TSeg[1].Base ; //CS
-
-    (*MV).registros[1] = (*MV).TSeg[1].Base ; //DS
-    (*MV).registros[5] = ((*MV).TSeg[0].Base << 16) & 0x0; //IP
-
-    //Los demas registros se inicializan al usarlos
 }
 
-void lectura(mv* MV, char* argv[]){
+void lectura(mv* MV, char* argv[], int tamanio){
 
     FILE *arch = fopen(argv[1], "rb");
     //FILE *arch = fopen("C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/PrimerParte/ArchivosMV/ArchivosSample/sample6.vmx", "rb");
@@ -120,8 +172,9 @@ void lectura(mv* MV, char* argv[]){
         char* cabecera = "VMX25";
         int i=0;
         int iguales = 1;
+        int tamDS=0, tamES=0, tamSS=0, tamKS=0, offsetEntry=0;
         while(i<5 && iguales){
-            iguales = cabecera[i] == (*MV).memoria[i];
+            iguales = (cabecera[i] == (*MV).memoria[i]);
             i++;
         }
         if(!iguales ){
@@ -133,16 +186,67 @@ void lectura(mv* MV, char* argv[]){
         int tamCS = (((*MV).memoria[6]&0x00FF) << 8 )| ((*MV).memoria[7] & 0x00FF);
         //Vector de registros
         
-        CargaRegistros(MV, tamCS);
-        fread((*MV).memoria,sizeof(char),tamCS,arch);
-        fclose(arch);
-        //Memoria ya esta lleno, sale del procedimiento
+        
+        //Llamados segun la version
+        if(cabecera[5] == '1'){
+            fread((*MV).memoria,sizeof(char),tamCS,arch);
+            fclose(arch);
+        }
+        else{
+            fread((*MV).memoria,sizeof(char),10,arch); //Lectura de la cabecera de Archivo VMX
+            tamDS = (((*MV).memoria[8]&0x00FF) << 8 )| ((*MV).memoria[9] & 0x00FF);
+            tamES = (((*MV).memoria[10]&0x00FF) << 8 )| ((*MV).memoria[11] & 0x00FF);
+            tamSS = (((*MV).memoria[12]&0x00FF) << 8 )| ((*MV).memoria[13] & 0x00FF);
+            tamKS = (((*MV).memoria[14]&0x00FF) << 8 )| ((*MV).memoria[15] & 0x00FF);
+            offsetEntry = ((*MV).memoria[16]&0x00FF) << 8 | ((*MV).memoria[17] & 0x00FF);
+        }
+        int arregloTamanios[6] = {tamañoPS(MV),tamCS, tamDS, tamES, tamSS, tamKS};
+
+        if(tamanio < sumaTamanio(arregloTamanios)){
+            CargaRegistros(MV, arregloTamanios, offsetEntry);
+        }
+        else{
+            printf("Error, tamanio de memoria insuficiente\n");
+            fclose(arch);
+            STOP(MV, 0, 0, 0); //Error
+        }
 
         
     }
     else
         printf("Error al abrir el archivo\n");
     
+}
+
+int sumaTamanio(int arreglo[]){
+    int suma=0;
+    for(int i=0; i<TamanioTablaS; i++){
+        suma += arreglo[i];
+    }
+    return suma;
+}
+
+int tamañoPS(mv* MV){
+    //Recorrer los parametros que vienen en despues de -p
+    return 0;
+}
+
+int buscaParametroTamanio(int argc, char* argv[]){
+    int i=0;
+    int tamanio=0;
+    while(i<argc && strcmp(argv[i][0],"m") != 0){
+        i++;
+    }
+    int j=2;
+    if(i<argc){
+        i++;
+        while(i<argc && argv[i][j] != '\0'){
+            tamanio += argv[i][j] - '0';
+            tamanio *= 10;
+            j++;
+        }
+    }
+    return tamanio;
 }
 
 void LeeCS (mv *MV){
@@ -154,8 +258,8 @@ void LeeCS (mv *MV){
     int opA,opB,operacion,IPaux, cont=0;
 
 
-    IPaux=(*MV).registros[5];
-    while ((*MV).registros[5]< (*MV).TSeg[0].Tamanio){  //IP <= (*MV).TSeg[0].Tamanio
+    IPaux=(*MV).registros[IP];
+    while ((*MV).registros[IP]< (*MV).TSeg[0].Tamanio){  //IP <= (*MV).TSeg[0].Tamanio
         instruccion = (*MV).memoria[IPaux]; //levanto el dato del CS apuntado por IP
         opB=(instruccion&0xC0)>>6;    //4 valores, 2 bits
         opA=(instruccion&0x30)>>4;
@@ -171,7 +275,7 @@ void LeeCS (mv *MV){
         IPaux= IPaux + cont;
         cont = 0;
         
-        (*MV).registros[5]=IPaux; //Graba en el IP la proxima instruccion a leer
+        (*MV).registros[IP]=IPaux; //Graba en el IP la proxima instruccion a leer
         
         if(operacion >= 0x0 & operacion <= 0x8)//Solo un operando
             if(opB != 0)//Se usa B, no A. Ignoramos A
@@ -198,7 +302,7 @@ void LeeCS (mv *MV){
                 printf("\n Fin de ejecucion");
                 STOP(MV, opA, opB, instruccion); //Error
             }
-        IPaux = (*MV).registros[5]; //Graba en el IP la proxima instruccion a leer, importa al hacer jump
+        IPaux = (*MV).registros[IP]; //Graba en el IP la proxima instruccion a leer, importa al hacer jump
     }
 
 }
@@ -206,14 +310,14 @@ void LeeCS (mv *MV){
 void SACAREGISTRO (mv MV,int *cont, int *bytesOp){
     *bytesOp=0;
     *cont += 1;
-    *bytesOp = MV.memoria[MV.registros[5] + *cont];
+    *bytesOp = MV.memoria[MV.registros[IP] + *cont];
     
 }
 
 void INMEDIATO (mv MV,int *cont, int *op){
   short int inmediato = 0;
-  inmediato = MV.memoria[MV.registros[5]+*cont + 2] &0x00FF;
-  inmediato = (MV.memoria[MV.registros[5]+*cont + 1] << 8) | inmediato;
+  inmediato = MV.memoria[MV.registros[IP]+*cont + 2] &0x00FF;
+  inmediato = (MV.memoria[MV.registros[IP]+*cont + 1] << 8) | inmediato;
   *op = 0;
   *op = inmediato;
   *cont += 2; //Aumento el contador
@@ -227,12 +331,12 @@ void MEMORIA (mv MV, int *cont, int *op){
     //primero se lee un inmediato, dos bytes
 
     //Funcion INMEDIATO
-    inmediato = MV.memoria[MV.registros[5]+*cont + 2];
-    inmediato = (MV.memoria[MV.registros[5]+*cont + 1] << 8) | inmediato;
+    inmediato = MV.memoria[MV.registros[IP]+*cont + 2];
+    inmediato = (MV.memoria[MV.registros[IP]+*cont + 1] << 8) | inmediato;
     *cont += 2;
     //
     *cont += 1; //Aumento el contador
-    codreg= (MV.memoria[MV.registros[5]+ *cont]>>4)&0x0F; //Codigo del registro en el vector
+    codreg= (MV.memoria[MV.registros[IP]+ *cont]>>4)&0x0F; //Codigo del registro en el vector
     
     basereg = MV.registros[codreg] >> 16;
     offset= MV.registros[codreg] & 0x0000FFFF;
@@ -373,7 +477,7 @@ void set(mv* MV, int opA, char tipoA, int valorB){
         if(valorB != 0){
             set(MV, opA, tipoA, valorA/valorB);
             CAMBIACC(MV,valorA/valorB);
-            (*MV).registros[9] = valorA%valorB; //Resto
+            (*MV).registros[AC] = valorA%valorB; //Resto
         }
         else{
             printf("Error de division por 0\n");
@@ -382,42 +486,42 @@ void set(mv* MV, int opA, char tipoA, int valorB){
     }
 
     void JMP (mv* MV, int opA, int opB, char operacion){
-        (*MV).registros[5] = opB;
+        (*MV).registros[IP] = opB;
     }
 
     void JZ (mv* MV, int opA, int opB, char operacion){
-        if ((*MV).registros[8] == 0x40000000 ){ //CC
-            (*MV).registros[5] = opB; //IP
+        if ((*MV).registros[CC] == 0x40000000 ){ //CC
+            (*MV).registros[IP] = opB; //IP
         }
     }
 
     void JP(mv* MV, int opA, int opB, char operacion){
-        if (((*MV).registros[8] == 0)) {
-            (*MV).registros[5] = opB; // IP
+        if (((*MV).registros[CC] == 0)) {
+            (*MV).registros[IP] = opB; // IP
         }
     }
 
     void JN (mv* MV, int opA, int opB, char operacion){
-        if (((*MV).registros[8]) == 0x80000000){ //CC
-            (*MV).registros[5] = opB; //IP
+        if (((*MV).registros[CC]) == 0x80000000){ //CC
+            (*MV).registros[IP] = opB; //IP
         }
     }
 
     void JNZ (mv* MV, int opA, int opB, char operacion){
-        if ((*MV).registros[8] != 0x40000000){ //CC
-            (*MV).registros[5] = opB; //IP
+        if ((*MV).registros[CC] != 0x40000000){ //CC
+            (*MV).registros[IP] = opB; //IP
         }
     }
 
     void JNP (mv* MV, int opA, int opB, char operacion){
-        if ((*MV).registros[8] != 0){ //CC
-            (*MV).registros[5] = opB; //IP
+        if ((*MV).registros[CC] != 0){ //CC
+            (*MV).registros[IP] = opB; //IP
         }
     }
 
     void JNN (mv* MV, int opA, int opB, char operacion){
-        if (((*MV).registros[8]) != 0x80000000){ //CC
-            (*MV).registros[5] = opB; //IP
+        if (((*MV).registros[CC]) != 0x80000000){ //CC
+            (*MV).registros[IP] = opB; //IP
         }
     }
 
@@ -472,7 +576,7 @@ void set(mv* MV, int opA, char tipoA, int valorB){
 
     void STOP(mv* MV, int opA, int opB, char operacion){
         //STOP
-        (*MV).registros[5] = (*MV).TSeg[0].Base + (*MV).TSeg[0].Tamanio; //IP
+        (*MV).registros[IP] = (*MV).TSeg[0].Base + (*MV).TSeg[0].Tamanio; //IP
     }
 
     void SWAP (mv* MV, int opA, int opB, char operacion){
@@ -504,15 +608,20 @@ void set(mv* MV, int opA, char tipoA, int valorB){
 
     void SHR (mv* MV, int opA, int opB, char operacion){
         char tipoA=(operacion >> 4) & 0x3;
-        int mascara, valorB = ValoropST((operacion>>6) & 0x3, opB, MV), aux;
-        aux = ValoropST(tipoA, opA, MV) >> valorB;
-
+        int mascara, valorB = ValoropST((operacion>>6) & 0x3, opB, MV);
+        int valorA = ValoropST(tipoA, opA, MV) >> valorB;
+        /*
         if (opA & 0x80000000){
             mascara = ((0xFFFFFFFF) << (32 - valorB)) & 0xFFFFFFFF;
             valorB|= mascara;
         }
-        set(MV, opA, tipoA, aux);
-        CAMBIACC(MV,aux);
+        */
+        
+        int base = ceil(log(valorB)/log(2));
+        valorA = valorA << (32-base);
+        valorA = valorA >> (32-base+valorB);
+        set(MV, opA, tipoA, valorA);
+        CAMBIACC(MV,valorA);
     }
 
     void CMP (mv* MV, int opA, int opB, char operacion){
@@ -562,6 +671,7 @@ void SYS (mv* MV, int opA, int opB, char operacion){
             STOP(MV, 0, 0, 0); //Error
         }
             
+        //Extender a los nuevos procedimientos
 }
 
 void SYSR(mv* MV, int punt, char CH, char CL, short int AL){
@@ -716,27 +826,27 @@ void EscrFormato(mv* MV, int i,int punt, short int AL, char CH){
 
 ///////
 void CAMBIACC (mv* MV, int valor){
-    (*MV).registros[8] &= 0x00000000; //Apaga los bits de estado
+    (*MV).registros[CC] &= 0x00000000; //Apaga los bits de estado
     if (valor < 0){
-        (*MV).registros[8] |= 0x80000000; // Si el If da 1, es negativo, Activo N (bit 15)
+        (*MV).registros[CC] |= 0x80000000; // Si el If da 1, es negativo, Activo N (bit 15)
         //(*MV).registros[8] &= ~0x40000000; // Apaga bit Z (bit 14)
     }
     else{
         if(valor==0){
-            (*MV).registros[8] |= 0x40000000; // Si el If da 1, es cero, Activo Z (bit 14)
+            (*MV).registros[CC] |= 0x40000000; // Si el If da 1, es cero, Activo Z (bit 14)
             //(*MV).registros[8] &= ~0x80000000;// Apaga bit N (bit 15)
         }
         else{
-            (*MV).registros[8] = 0;
+            (*MV).registros[CC] = 0;
         }
     }
 }
 
 void BytesMEMORIA(mv MV, int *cont, int *operando){
     int todo=0;
-    todo = MV.memoria[MV.registros[5]+*cont + 3] & 0xFF;
-    todo = (MV.memoria[MV.registros[5]+*cont + 2] << 8) | todo;
-    todo = (MV.memoria[MV.registros[5]+*cont + 1] << 16) | todo;
+    todo = MV.memoria[MV.registros[IP]+*cont + 3] & 0xFF;
+    todo = (MV.memoria[MV.registros[IP]+*cont + 2] << 8) | todo;
+    todo = (MV.memoria[MV.registros[IP]+*cont + 1] << 16) | todo;
 
 
     *cont += 3;
@@ -744,13 +854,18 @@ void BytesMEMORIA(mv MV, int *cont, int *operando){
 }
 
 void Disassembler(mv* MV){
+    //Hacer flechita que apunta a la instruccion actual
+
+
+
+
     void (*FuncOperandos[4])(mv, int *, int *) = {NULO,SACAREGISTRO,INMEDIATO,BytesMEMORIA};
     int cont=0; //Este contador es para saber cuantos bytes se leyeron
-    (*MV).registros[5]=(*MV).TSeg[0].Base; //IP = CS
+    (*MV).registros[IP]=(*MV).TSeg[0].Base; //IP = CS
 
     char* nomFun[32] = {"SYS","JMP","JZ","JP","JN","JNZ","JNP","JNN","NOT","","","","","","","STOP","MOV","ADD","SUB","SWAP","MUL","DIV","CMP","SHL","SHR","AND","OR","XOR","LDL","LDH","RND"};
-    while((*MV).registros[5] < ((*MV).TSeg[0].Base + (*MV).TSeg[0].Tamanio)){
-        char instruccion = (*MV).memoria[(*MV).registros[5]];
+    while((*MV).registros[IP] < ((*MV).TSeg[0].Base + (*MV).TSeg[0].Tamanio)){
+        char instruccion = (*MV).memoria[(*MV).registros[IP]];
         //Ya se mostro la orden, ahora se procede a mostrar los operandos
         char tipoA = (instruccion >> 4) & 0x3, operacion = instruccion & 0x1F,tipoB = (instruccion >> 6) & 0x3;
         int operandoA, operandoB, i;
@@ -759,9 +874,9 @@ void Disassembler(mv* MV){
         FuncOperandos[tipoB](*MV, &cont, &operandoB);
         FuncOperandos[tipoA](*MV, &cont, &operandoA);
         
-        printf("[%04X] %02X ", (*MV).registros[5], instruccion&0x00FF);
+        printf("[%04X] %02X ", (*MV).registros[IP], instruccion&0x00FF);
 
-        (*MV).registros[5] += cont+1;
+        (*MV).registros[IP] += cont+1;
         cont = 0; //Reinicio el contador
          //Aumento el IP
 
