@@ -38,7 +38,7 @@ typedef struct{
     int registros[TamanioRegistros];  //Del elemento 8 al 15 son valores enteros, los demas son referencias a memoria
     TablaS TSeg[TamanioTablaS];} mv;
 
-void lectura(mv*, char*[], int tamanio);
+void lectura(mv*, char*[], int , int );
 void CargaRegistros(mv*, int[], int);
 
 void SYS(mv*,int, int,char );
@@ -97,11 +97,22 @@ void Disassembler(mv*);
 int main(int argc, char *argv[]){
     //Las funciones del vector deben recibir los mismos parametros
 
-    int tamanio = Tamtot;
-    tamanio = buscaParametroTamanio(argc, argv);
+    int tamanio, ubicacion, TamPS=0;
+
+    ubicacion  = existeParam(argc, argv);
+    tamanio = buscaParametroTamanio(argc, argv); //funcion que busca el tamanio de la memoria
+
+    if(tamanio<=0)
+        tamanio = Tamtot; //Si no se encuentra el tamanio, se asigna el maximo
+    
+    if(ubicacion){
+        TamPS = tamanioPS(ubicacion, argc, argv); //Se asigna el tamanio de la memoria
+    }
+
     mv MV; //Variable maquina virtual
+
     //if(hay .vmx en argv){}
-        lectura (&MV, argv, tamanio); //Llamada a la funcion lectura
+        lectura (&MV, argv, tamanio, TamPS); //Llamada a la funcion lectura
     //else if(solo hay .vmi){}
     //else if(hay de los dos){}
     LeeCS(&MV);
@@ -115,55 +126,15 @@ int main(int argc, char *argv[]){
     return 0;
 }
 
-void CargaRegistros(mv* MV, int ArregloTamanios[], int offsetEntry){
-    int j=0, param;
-    int i;
-
-    (*MV).registros[CS] = -1;
-    (*MV).registros[DS] = -1;
-    (*MV).registros[ES] = -1;
-    (*MV).registros[SS] = -1;
-    (*MV).registros[KS] = -1;
-    (*MV).registros[IP] = -1;
-    (*MV).registros[SP] = -1;
-    (*MV).registros[BP] = -1;
-    (*MV).registros[CC] = 0;
-    (*MV).registros[AC] = 0;
-    (*MV).registros[EAX] = 0;
-    (*MV).registros[EBX] = 0;
-    (*MV).registros[ECX] = 0;
-    (*MV).registros[EDX] = 0;
-    (*MV).registros[EEX] = 0;
-    (*MV).registros[EFX] = 0;
-    int suma=0;
-    param = (ArregloTamanios[0] > 0);
-    for(i=0; i<TamanioTablaS; i++){
-
-        if(ArregloTamanios[i] != 0){
-            (*MV).TSeg[j].Base = j;
-            (*MV).TSeg[j].Tamanio = ArregloTamanios[i];
-            j++;
-        }
-
+int existeParam(int argc, char* argv[]){
+    int i=0;
+    while(i<argc && strcmp(argv[i],"-p") != 0){
+        i++;
     }
-    i=(ArregloTamanios[0] > 0);
-    if(ArregloTamanios[KS+1] != 0)
-        (*MV).registros[KS] = (((*MV).TSeg[i++].Base<<16) & 0xFFFF0000) | (ArregloTamanios[KS+1] & 0x0000FFFF);
-    if(ArregloTamanios[CS+1] != 0)
-        (*MV).registros[CS] = (((*MV).TSeg[i++].Base<<16) & 0xFFFF0000) | (ArregloTamanios[CS+1] & 0x0000FFFF);
-    if(ArregloTamanios[DS+1] != 0)
-        (*MV).registros[DS] = (((*MV).TSeg[i++].Base<<16) & 0xFFFF0000) | (ArregloTamanios[DS+1] & 0x0000FFFF);
-    if(ArregloTamanios[ES+1] != 0)
-        (*MV).registros[ES] = (((*MV).TSeg[i++].Base<<16) & 0xFFFF0000) | (ArregloTamanios[ES+1] & 0x0000FFFF);
-    if(ArregloTamanios[SS+1] != 0)
-        (*MV).registros[SS] = (((*MV).TSeg[i++].Base<<16) & 0xFFFF0000) | (ArregloTamanios[SS+1] & 0x0000FFFF);
-    
-    
-    (*MV).registros[IP]=(*MV).registros[CS] | offsetEntry; // Inicializacion IP
-
+    return (i<argc);
 }
 
-void lectura(mv* MV, char* argv[], int tamanio){
+void lectura(mv* MV, char* argv[], int tamanio, int TamPS){
 
     FILE *arch = fopen(argv[1], "rb");
     //FILE *arch = fopen("C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/PrimerParte/ArchivosMV/ArchivosSample/sample6.vmx", "rb");
@@ -200,7 +171,9 @@ void lectura(mv* MV, char* argv[], int tamanio){
             tamKS = (((*MV).memoria[14]&0x00FF) << 8 )| ((*MV).memoria[15] & 0x00FF);
             offsetEntry = ((*MV).memoria[16]&0x00FF) << 8 | ((*MV).memoria[17] & 0x00FF);
         }
-        int arregloTamanios[6] = {tamañoPS(MV),tamCS, tamDS, tamES, tamSS, tamKS};
+
+
+        int arregloTamanios[6] = {TamPS,tamKS, tamCS, tamDS, tamES, tamSS};
 
         if(tamanio < sumaTamanio(arregloTamanios)){
             CargaRegistros(MV, arregloTamanios, offsetEntry);
@@ -218,6 +191,53 @@ void lectura(mv* MV, char* argv[], int tamanio){
     
 }
 
+void CargaRegistros(mv* MV, int ArregloTamanios[], int offsetEntry){
+    int j=0, param;
+    int i;
+
+    (*MV).registros[CS] = -1;
+    (*MV).registros[DS] = -1;
+    (*MV).registros[ES] = -1;
+    (*MV).registros[SS] = -1;
+    (*MV).registros[KS] = -1;
+    (*MV).registros[IP] = -1;
+    (*MV).registros[SP] = -1;
+    (*MV).registros[BP] = -1;
+    (*MV).registros[CC] = 0;
+    (*MV).registros[AC] = 0;
+    (*MV).registros[EAX] = 0;
+    (*MV).registros[EBX] = 0;
+    (*MV).registros[ECX] = 0;
+    (*MV).registros[EDX] = 0;
+    (*MV).registros[EEX] = 0;
+    (*MV).registros[EFX] = 0;
+    int suma=0;
+    for(i=0; i<TamanioTablaS; i++){
+
+        if(ArregloTamanios[i] != 0){
+            (*MV).TSeg[i].Base = suma;
+            suma += ArregloTamanios[i];
+            (*MV).TSeg[i].Tamanio = ArregloTamanios[i];
+            j++;
+        }
+
+    }
+    i=(ArregloTamanios[0] > 0);
+    if(ArregloTamanios[KS+1] != 0)
+        (*MV).registros[KS] = (((*MV).TSeg[i++].Base<<16) & 0xFFFF0000) | (ArregloTamanios[KS+1] & 0x0000FFFF);
+    if(ArregloTamanios[CS+1] != 0)
+        (*MV).registros[CS] = (((*MV).TSeg[i++].Base<<16) & 0xFFFF0000) | (ArregloTamanios[CS+1] & 0x0000FFFF);
+    if(ArregloTamanios[DS+1] != 0)
+        (*MV).registros[DS] = (((*MV).TSeg[i++].Base<<16) & 0xFFFF0000) | (ArregloTamanios[DS+1] & 0x0000FFFF);
+    if(ArregloTamanios[ES+1] != 0)
+        (*MV).registros[ES] = (((*MV).TSeg[i++].Base<<16) & 0xFFFF0000) | (ArregloTamanios[ES+1] & 0x0000FFFF);
+    if(ArregloTamanios[SS+1] != 0)
+        (*MV).registros[SS] = (((*MV).TSeg[i++].Base<<16) & 0xFFFF0000) | (ArregloTamanios[SS+1] & 0x0000FFFF);
+
+    (*MV).registros[IP]=(*MV).registros[CS] | offsetEntry; // Inicializacion IP
+
+}
+
 int sumaTamanio(int arreglo[]){
     int suma=0;
     for(int i=0; i<TamanioTablaS; i++){
@@ -226,9 +246,12 @@ int sumaTamanio(int arreglo[]){
     return suma;
 }
 
-int tamañoPS(mv* MV){
-    //Recorrer los parametros que vienen en despues de -p
-    return 0;
+int tamanioPS(int ubicacion, int argc, char *argv[]){
+    int acum=0;
+    while(ubicacion<argc)
+        acum += strlen(argv[++ubicacion]) + 4;
+    return acum;
+    
 }
 
 int buscaParametroTamanio(int argc, char* argv[]){
@@ -245,8 +268,10 @@ int buscaParametroTamanio(int argc, char* argv[]){
             tamanio *= 10;
             j++;
         }
+        return tamanio;
     }
-    return tamanio;
+    else
+        return -1;
 }
 
 void LeeCS (mv *MV){
@@ -624,6 +649,43 @@ void set(mv* MV, int opA, char tipoA, int valorB){
         CAMBIACC(MV,valorA);
     }
 
+    void PUSH (mv* MV, int opA, int opB, char operacion){
+        char tipoB=(operacion>>6) & 0x3;
+        int valor= ValoropST(tipoB,opB,MV);
+        int indice, valor;
+
+        (*MV).registros[SP]-=4;
+        indice=(*MV).registros[SS] >>16; //Entrada segmento SS
+    
+         if (( (*MV).registros[SP])<(*MV).TSeg[indice].Base){
+            printf("Error: Stack overflow\n");
+             STOP(MV, 0, 0, 0);
+        }
+   
+        setMemoria(MV,(*MV).registros[SP], valor);  //Guarda valor en la posición SP de memoria[], que está dentro del SS,lo estás guardando en la pila.
+    }
+
+    void POP (mv* MV, int opA, int opB, char operacion){
+        char tipoB=(operacion>>6) & 0x3;
+        int  indice= (*MV).registros[SS]>>16; // Entrada Tabla Segmentos
+        int  base= (*MV).TSeg[indice].Base;
+        int  limite= base + (*MV).TSeg[indice].Tamanio;
+        int  valor;
+
+        if ((*MV).registros[SP]> limite){
+            printf("Error: Stack underflow\n");
+            STOP(MV, 0, 0, 0);
+        }
+    
+        valor = 0;
+        for (int i = 0; i < 4; i++) {
+             valor = (valor << 8) | (MV->memoria[(*MV).registros[SP] + i] & 0xFF); //Extrae valor de la memoria
+        }
+
+        set(MV, opB, tipoB, valor);  // Escribe valor en el destino.
+        (*MV).registros[SP] +=4;  //Incremento SP
+    }
+
     void CMP (mv* MV, int opA, int opB, char operacion){
         char tipoA=(operacion >> 4) & 0x3;
         char tipoB=(operacion>>6) & 0x3;
@@ -632,6 +694,7 @@ void set(mv* MV, int opA, char tipoA, int valorB){
         CAMBIACC(MV, valorA-valorB);
     }
     
+
 
 ////////
 int punteroReg(mv MV, int dirReg, int* op){
