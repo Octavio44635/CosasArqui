@@ -97,20 +97,21 @@ void Disassembler(mv*);
 int main(int argc, char *argv[]){
     //Las funciones del vector deben recibir los mismos parametros
 
-    int tamanio, ubicacion, TamPS=0;
-
-    ubicacion  = existeParam(argc, argv);
+    int tamanio, ubicacion=0, TamPS=0;
+    printf("argc: %d\n", argc);
+if(argc > 0){
     tamanio = buscaParametroTamanio(argc, argv); //funcion que busca el tamanio de la memoria
-
-    if(tamanio<=0)
+    printf("Tamanio: %d\n", tamanio);
+    if(tamanio>0)
         tamanio = Tamtot; //Si no se encuentra el tamanio, se asigna el maximo
     
-    if(ubicacion){
-        TamPS = tamanioPS(ubicacion, argc, argv); //Se asigna el tamanio de la memoria
+    if(ubicacion > 0){
+        TamPS = tamanioPS(argc, argv); //Se asigna el tamanio de la memoria
     }
-
+    printf("Tamaño de argv: %d\n", sizeof(argv)*argc-TamPS);
+}
     mv MV; //Variable maquina virtual
-
+    /*
     //if(hay .vmx en argv){}
         lectura (&MV, argv, tamanio, TamPS); //Llamada a la funcion lectura
     //else if(solo hay .vmi){}
@@ -123,15 +124,12 @@ int main(int argc, char *argv[]){
         Disassembler(&MV);
         
 
+        */
     return 0;
 }
 
 int existeParam(int argc, char* argv[]){
-    int i=0;
-    while(i<argc && strcmp(argv[i],"-p") != 0){
-        i++;
-    }
-    return (i<argc);
+    
 }
 
 void lectura(mv* MV, char* argv[], int tamanio, int TamPS){
@@ -246,29 +244,33 @@ int sumaTamanio(int arreglo[]){
     return suma;
 }
 
-int tamanioPS(int ubicacion, int argc, char *argv[]){
+int tamanioPS(int argc, char *argv[]){
     int acum=0;
-    while(ubicacion<argc)
-        acum += strlen(argv[++ubicacion]) + 4;
+    int i=0;
+    while(i<argc && strcmp(argv[i],"-p") != 0){
+        i++;
+    }
+    while(i<argc)
+        acum += strlen(argv[++i]) + 4;
     return acum;
     
 }
 
 int buscaParametroTamanio(int argc, char* argv[]){
-    int i=0;
+    int i=0,j=0;
     int tamanio=0;
-    while(i<argc && strcmp(argv[i][0],"m") != 0){
+    while(i<argc && *argv[i] != 'm'){
         i++;
     }
-    int j=2;
     if(i<argc){
-        i++;
-        while(i<argc && argv[i][j] != '\0'){
+        j=2;
+        while(argv[i][j] != '\0'){ //Tiene que pasar el numero que esta despues del igual, deberia probar como funciona, la primer condicion no deberia ni existir
             tamanio += argv[i][j] - '0';
-            tamanio *= 10;
             j++;
+            tamanio *= 10;
         }
-        return tamanio;
+
+        return tamanio/10;
     }
     else
         return -1;
@@ -652,14 +654,14 @@ void set(mv* MV, int opA, char tipoA, int valorB){
     void PUSH (mv* MV, int opA, int opB, char operacion){
         char tipoB=(operacion>>6) & 0x3;
         int valor= ValoropST(tipoB,opB,MV);
-        int indice, valor;
+        int indice;
 
         (*MV).registros[SP]-=4;
         indice=(*MV).registros[SS] >>16; //Entrada segmento SS
     
          if (( (*MV).registros[SP])<(*MV).TSeg[indice].Base){
             printf("Error: Stack overflow\n");
-             STOP(MV, 0, 0, 0);
+            STOP(MV, 0, 0, 0);
         }
    
         setMemoria(MV,(*MV).registros[SP], valor);  //Guarda valor en la posición SP de memoria[], que está dentro del SS,lo estás guardando en la pila.
@@ -685,6 +687,20 @@ void set(mv* MV, int opA, char tipoA, int valorB){
         set(MV, opB, tipoB, valor);  // Escribe valor en el destino.
         (*MV).registros[SP] +=4;  //Incremento SP
     }
+
+    void CALL (mv* MV, int opA, int opB, char operacion){
+        char tipoB= (operacion>>6) & 0x3;
+        int Dirdestino= ValoropST(tipoB,opB,MV); //Direccion a la que salta
+    
+        //IP apunta ya a la direccion a la siguiente direccion.
+    
+         PUSH (MV,0,(*MV).registros[IP], 0x80); //preguntar eso del 0x8 q no lo entiendo.
+    
+         //Salto
+        (*MV).registros[IP] = Dirdestino;
+    }
+   
+
 
     void CMP (mv* MV, int opA, int opB, char operacion){
         char tipoA=(operacion >> 4) & 0x3;
