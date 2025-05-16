@@ -22,7 +22,7 @@
 //Cambiar las constantes en todo el codigo
 
 
-#define Tamtot 16384*2 //Se asume que mas del doble de la memoria original no tendra?
+#define Tamtot 16384 //16KiB
 #define TamanioRegistros 16
 #define TamanioTablaS 6 //Tamaño maximo = 6
 
@@ -102,30 +102,34 @@ int tamanio, ubicacion=0, TamPS=0;
 //Busca el parametro m=
 if(argc > 0){
     tamanio = buscaParametroTamanio(argc, argv); //funcion que busca el tamanio de la memoria
-// Entra siempre a esta funcion por lo que entiendo
-if(tamanio<0)
-    tamanio = Tamtot; //Si no se encuentra el tamanio, se asigna 16KiB
-    TamPS = creaPS(&MV, argc, argv); //Se asigna el tamanio de la memoria
+    if(tamanio<0)
+        tamanio = Tamtot; //Si no se encuentra el tamanio, se asigna 16KiB
 }
+TamPS = creaPS(&MV, argc, argv); //Se asigna el tamanio de la memoria
+
 //Hasta aca todo correcto
-    
-    //if(hay .vmx en argv){}
+    if(buscaArchivo(1, ".vmx",argv,argc)){ // si hay vmx nada asegura que no haya vmi
         lectura (&MV, argv, tamanio, TamPS); //Llamada a la funcion lectura
-        printf("%d\n",TamPS);
         for(int i=0; i<TamPS;i++){
             printf("%02X %d %c\n", MV.memoria[i], MV.memoria[i], MV.memoria[i]);
         }
-    //else if(solo hay .vmi){}
-    //else if(hay de los dos){}
+        printf("entro en vmx");
+
+    }
+    else if(buscaArchivo(1, ".vmi",argv,argc)) //Si esto da verdadero es por que no hay vmx
+        lecturaVMI(&MV, tamanio, argv[1]);
+
+    //Hay que iniciar el StackSegment
+    cargaSS(&MV, argv, argc);
     //LeeCS(&MV);
     //printf("\n");
     //Que busque en el vector, el orden es variable ahora
 
     //if(strcmp(argv[2],"-d") == 0)
     //    Disassembler(&MV);
-    //    
+    //
 
-    //    
+    //
     return 0;
 }
 
@@ -158,7 +162,7 @@ void lectura(mv* MV, char* argv[], int tamanio, int TamPS){
         
         
         //Llamados segun la version
-        if(cabecera[5] == '1'){
+        if((*MV).memoria[5] == '1'){
             fread((*MV).memoria,sizeof(char),tamCS,arch);
             fclose(arch);
         }
@@ -189,6 +193,41 @@ void lectura(mv* MV, char* argv[], int tamanio, int TamPS){
     else
         printf("Error al abrir el archivo\n");
     
+}
+
+void lecturaVMI(mv* MV, int tamanio, char* arch){
+    FILE *arch = fopen(arch, "rb");
+    char* header = "VMI25";
+    int i=0, iguales = 1;
+    if(arch != NULL){
+        fread((*MV).memoria,sizeof(char),8,arch); //Lectura header
+        while(i<5 && iguales){
+            iguales = (header[i] == (*MV).memoria[i]);
+            i++;
+        }
+        if(!iguales){
+            printf("Error, cabecera no valida\n");
+            fclose(arch);
+            STOP(MV, 0, 0, 0); //Error
+        }
+
+        if((*MV).memoria[5] == '1'){
+            tamanio = ((*MV).memoria[6]&0x00FF) << 8 | ((*MV).memoria[7] & 0x00FF);
+        }
+        fread((*MV).memoria+8,sizeof(char),64,arch); //Lectura de la memoria
+        cargaRegistrosVMI(MV);
+
+        fread((*MV).memoria + 8,sizeof(char), 32,arch); //Lectura de la memoria
+        cargaTablaVMI(MV);
+
+        fread((*MV).memoria + 8,sizeof(char),tamanio,arch); //Lectura de la memoria
+
+        //Deberia estar todo correctamente cargado aca
+
+        fclose(arch);
+    }
+    else
+        printf("Error al abrir el archivo\n");
 }
 
 void CargaRegistros(mv* MV, int ArregloTamanios[], int offsetEntry){
@@ -254,6 +293,7 @@ int creaPS(mv* MV, int argc, char *argv[]){
         i++;
     }
     i++;
+    
     int nroPal = argc - i;
     while(i<argc){
         for (j=0; j<strlen(argv[i]); j++){ //suma 5 por que en el param hay que guardar su /0 y su puntero
@@ -265,13 +305,15 @@ int creaPS(mv* MV, int argc, char *argv[]){
         i++;
     }
     //asignacion de punteros
-    int puntero = 0;
-    for (int i=0; i<nroPal; i++){
-        for (j=0; j<4;j++){
-            (*MV).memoria[acum+j] = (puntero >> ((3-j)*8)) & 0x00FF; //Guarda el puntero en la memoria
+    if(i<argc){
+        int puntero = 0;
+        for (int i=0; i<nroPal; i++){
+            for (j=0; j<4;j++){
+                (*MV).memoria[acum+j] = (puntero >> ((3-j)*8)) & 0x00FF; //Guarda el puntero en la memoria
+            }
+            acum += 4;
+            puntero += strlen(argv[i]) + 1; // +2 por el /0 y pasa al espacio sig, es lo mismo que hacerle un or
         }
-        acum += 4;
-        puntero += strlen(argv[i]) + 1; // +2 por el /0 y pasa al espacio sig, es lo mismo que hacerle un or
     }
 
     return acum;
@@ -284,6 +326,7 @@ int buscaParametroTamanio(int argc, char* argv[]){
     while(i<argc && *argv[i] != 'm'){
         i++;
     }
+    //m=123
     if(i<argc){
         j=2;
         while(argv[i][j] != '\0'){ //Tiene que pasar el numero que esta despues del igual, deberia probar como funciona, la primer condicion no deberia ni existir
@@ -298,10 +341,46 @@ int buscaParametroTamanio(int argc, char* argv[]){
         return -1;
 }
 
-//
+int buscaArchivo(int indice, char* ext, char* argv[], int argc){
+    int i=0;
+    if(indice < argc){
+    int len = strlen(argv[indice]);
+    char* extArchivo = {argv[strlen(argv[indice])-4], argv[strlen(argv[indice])-3], argv[strlen(argv[indice])-2], argv[strlen(argv[indice])-1], '\0'};
+    
+        while(i<argc && strcmp(argv[i],ext) != 0){
+            i++;
+        }
+    }
+    return i<argc;
 
+}
+
+void cargaRegistrosVMI(mv* MV){
+    int i=0, pos=9; //parte de la cabecera
+    for(i=0; i<TamanioRegistros; i++){
+        (*MV).registros[i] = ((*MV).memoria[pos] & 0x00FF) << 24;
+        (*MV).registros[i] = (*MV).registros[i] | ((*MV).memoria[pos+1] & 0x00FF) << 16;
+        (*MV).registros[i] = (*MV).registros[i] | ((*MV).memoria[pos+2] & 0x00FF) << 8;
+        (*MV).registros[i] = (*MV).registros[i] | ((*MV).memoria[pos+3] & 0x00FF);
+    }
+    //Los registros deberian de estar cargados
+}
+
+void cargaTablaVMI(mv* MV){
+    int i=0, pos=8;
+
+
+
+
+}
+
+void cargaSS(mv* MV, char* argv[], int argc){
+    PUSH(MV, 0, argv, 0b10000000); //creo que esta bien
+    PUSH(MV, 0, argc, 0b10000000);
+    PUSH(MV, 0, -1, 0b10000000);
+}
 void LeeCS (mv *MV){
-    void (*Funciones[32])(mv*, int, int, char) = {SYS,JMP,JZ,JP,JZ,JNZ,JNP,JNN,NOT,EMPTY,EMPTY,EMPTY,EMPTY,EMPTY,EMPTY,STOP,MOV,ADD,SUB,SWAP,MUL,DIV,CMP,SHL,SHR,AND,OR,XOR,LDL,LDH,RND,EMPTY};
+    void (*Funciones[32])(mv*, int, int, char) = {SYS,JMP,JZ,JP,JZ,JNZ,JNP,JNN,NOT,EMPTY,EMPTY,PUSH,POP,CALL,RET,STOP,MOV,ADD,SUB,SWAP,MUL,DIV,CMP,SHL,SHR,AND,OR,XOR,LDL,LDH,RND,EMPTY};
     void (*FuncOperandos[4])(mv, int *, int *) = {NULO,SACAREGISTRO,INMEDIATO,MEMORIA};
 
 
@@ -319,9 +398,14 @@ void LeeCS (mv *MV){
         //xx x_x_xxxx
         int BytesA=0, BytesB=0;
         
+        //Deberias sacar los bits
         FuncOperandos[opB](*MV, &cont, &BytesB); //(MV, cont, bytesOp);
+        //Deberias cortar el dato 
         
+        //En A lo mismo
         FuncOperandos[opA](*MV, &cont, &BytesA);
+
+        
         cont++;
         IPaux= IPaux + cont;
         cont = 0;
@@ -388,7 +472,8 @@ void MEMORIA (mv MV, int *cont, int *op){
     //
     *cont += 1; //Aumento el contador
     codreg= (MV.memoria[MV.registros[IP]+ *cont]>>4)&0x0F; //Codigo del registro en el vector
-    
+    char tamañoCelda = (MV.memoria[MV.registros[IP]+ *cont])&0x03;
+
     basereg = MV.registros[codreg] >> 16;
     offset= MV.registros[codreg] & 0x0000FFFF;
 
@@ -681,9 +766,9 @@ void set(mv* MV, int opA, char tipoA, int valorB){
         int indice;
 
         (*MV).registros[SP]-=4;
-        indice=(*MV).registros[SS] >>16; //Entrada segmento SS
+        indice=((*MV).registros[SS] >>16) &0x0000FFFF; //Entrada segmento SS
     
-         if (( (*MV).registros[SP])<(*MV).TSeg[indice].Base){
+         if (( (*MV).registros[SP]&0x0000FFFF)<(*MV).TSeg[indice].Tamanio){
             printf("Error: Stack overflow\n");
             STOP(MV, 0, 0, 0);
         }
@@ -721,10 +806,17 @@ void set(mv* MV, int opA, char tipoA, int valorB){
          PUSH (MV,0,(*MV).registros[IP], 0x80); //preguntar eso del 0x8 q no lo entiendo.
     
          //Salto
-        (*MV).registros[IP] = Dirdestino;
+        JMP(MV, 0, Dirdestino, 0);
     }
-   
 
+    void RET(mv* MV, int opA, int opB, char operacion){
+
+        POP(MV, 0, 0x50, 0x40);
+
+    //Hacemos POP IP  ---->  IP= registro 5, y el sector es 0 --> opB= 0x50 ----> 0101 0000
+    //operacion= 0x40 ----> tipoB=1 (Registro) --> 0100 0000
+    // se hace esto ya que en POP, se calcula el tipo y el sector cuando se llama a set
+    }
 
     void CMP (mv* MV, int opA, int opB, char operacion){
         char tipoA=(operacion >> 4) & 0x3;
