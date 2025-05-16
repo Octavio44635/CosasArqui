@@ -22,7 +22,7 @@
 //Cambiar las constantes en todo el codigo
 
 
-#define Tamtot 16384
+#define Tamtot 16384*2 //Se asume que mas del doble de la memoria original no tendra?
 #define TamanioRegistros 16
 #define TamanioTablaS 6 //Tamaño maximo = 6
 
@@ -96,35 +96,36 @@ void Disassembler(mv*);
 
 int main(int argc, char *argv[]){
     //Las funciones del vector deben recibir los mismos parametros
+mv MV;
+int tamanio, ubicacion=0, TamPS=0;
 
-    int tamanio, ubicacion=0, TamPS=0;
-    printf("argc: %d\n", argc);
+//Busca el parametro m=
 if(argc > 0){
     tamanio = buscaParametroTamanio(argc, argv); //funcion que busca el tamanio de la memoria
-    printf("Tamanio: %d\n", tamanio);
-    if(tamanio>0)
-        tamanio = Tamtot; //Si no se encuentra el tamanio, se asigna el maximo
-    
-    if(ubicacion > 0){
-        TamPS = tamanioPS(argc, argv); //Se asigna el tamanio de la memoria
-    }
-    printf("Tamaño de argv: %d\n", sizeof(argv)*argc-TamPS);
+// Entra siempre a esta funcion por lo que entiendo
+if(tamanio<0)
+    tamanio = Tamtot; //Si no se encuentra el tamanio, se asigna 16KiB
+    TamPS = creaPS(&MV, argc, argv); //Se asigna el tamanio de la memoria
 }
-    mv MV; //Variable maquina virtual
-    /*
+//Hasta aca todo correcto
+    
     //if(hay .vmx en argv){}
         lectura (&MV, argv, tamanio, TamPS); //Llamada a la funcion lectura
+        printf("%d\n",TamPS);
+        for(int i=0; i<TamPS;i++){
+            printf("%02X %d %c\n", MV.memoria[i], MV.memoria[i], MV.memoria[i]);
+        }
     //else if(solo hay .vmi){}
     //else if(hay de los dos){}
-    LeeCS(&MV);
-    printf("\n");
+    //LeeCS(&MV);
+    //printf("\n");
     //Que busque en el vector, el orden es variable ahora
 
-    if(strcmp(argv[2],"-d") == 0)
-        Disassembler(&MV);
-        
+    //if(strcmp(argv[2],"-d") == 0)
+    //    Disassembler(&MV);
+    //    
 
-        */
+    //    
     return 0;
 }
 
@@ -171,10 +172,11 @@ void lectura(mv* MV, char* argv[], int tamanio, int TamPS){
         }
 
 
-        int arregloTamanios[6] = {TamPS,tamKS, tamCS, tamDS, tamES, tamSS};
+        int arregloTamanios[6] = {TamPS, tamCS, tamDS, tamES, tamSS, tamKS}; //Arreglo de tamanios de segmentos
 
-        if(tamanio < sumaTamanio(arregloTamanios)){
+        if(tamanio >= sumaTamanio(arregloTamanios)){
             CargaRegistros(MV, arregloTamanios, offsetEntry);
+
         }
         else{
             printf("Error, tamanio de memoria insuficiente\n");
@@ -244,14 +246,34 @@ int sumaTamanio(int arreglo[]){
     return suma;
 }
 
-int tamanioPS(int argc, char *argv[]){
+int creaPS(mv* MV, int argc, char *argv[]){
     int acum=0;
     int i=0;
+    int j=0;
     while(i<argc && strcmp(argv[i],"-p") != 0){
         i++;
     }
-    while(i<argc)
-        acum += strlen(argv[++i]) + 4;
+    i++;
+    int nroPal = argc - i;
+    while(i<argc){
+        for (j=0; j<strlen(argv[i]); j++){ //suma 5 por que en el param hay que guardar su /0 y su puntero
+            (*MV).memoria[acum+j] = argv[i][j];
+        }
+        acum += j;
+        (*MV).memoria[acum] = '\0'; //Agrega el /0 al final
+        acum++;
+        i++;
+    }
+    //asignacion de punteros
+    int puntero = 0;
+    for (int i=0; i<nroPal; i++){
+        for (j=0; j<4;j++){
+            (*MV).memoria[acum+j] = (puntero >> ((3-j)*8)) & 0x00FF; //Guarda el puntero en la memoria
+        }
+        acum += 4;
+        puntero += strlen(argv[i]) + 1; // +2 por el /0 y pasa al espacio sig, es lo mismo que hacerle un or
+    }
+
     return acum;
     
 }
@@ -275,6 +297,8 @@ int buscaParametroTamanio(int argc, char* argv[]){
     else
         return -1;
 }
+
+//
 
 void LeeCS (mv *MV){
     void (*Funciones[32])(mv*, int, int, char) = {SYS,JMP,JZ,JP,JZ,JNZ,JNP,JNN,NOT,EMPTY,EMPTY,EMPTY,EMPTY,EMPTY,EMPTY,STOP,MOV,ADD,SUB,SWAP,MUL,DIV,CMP,SHL,SHR,AND,OR,XOR,LDL,LDH,RND,EMPTY};
