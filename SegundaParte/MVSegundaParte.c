@@ -108,7 +108,7 @@ if(argc > 0){
 TamPS = creaPS(&MV, argc, argv); //Se asigna el tamanio de la memoria
 
 //Hasta aca todo correcto
-    if(buscaArchivo(1, ".vmx",argv,argc)){ // si hay vmx nada asegura que no haya vmi
+    if(buscaStringArgv(1, ".vmx",argv,argc)){ // si hay vmx nada asegura que no haya vmi
         lectura (&MV, argv, tamanio, TamPS); //Llamada a la funcion lectura
         for(int i=0; i<TamPS;i++){
             printf("%02X %d %c\n", MV.memoria[i], MV.memoria[i], MV.memoria[i]);
@@ -116,26 +116,22 @@ TamPS = creaPS(&MV, argc, argv); //Se asigna el tamanio de la memoria
         printf("entro en vmx");
 
     }
-    else if(buscaArchivo(1, ".vmi",argv,argc)) //Si esto da verdadero es por que no hay vmx
+    else if(buscaStringArgv(1, ".vmi",argv,argc) && !buscaStringArgv(1, ".vmx",argv,argc)) //Si esto da verdadero es por que no hay vmx
         lecturaVMI(&MV, tamanio, argv[1]);
 
     //Hay que iniciar el StackSegment
     cargaSS(&MV, argv, argc);
-    //LeeCS(&MV);
-    //printf("\n");
-    //Que busque en el vector, el orden es variable ahora
+    LeeCS(&MV);
+    printf("\n");
 
-    //if(strcmp(argv[2],"-d") == 0)
-    //    Disassembler(&MV);
+    if(buscaStringArgv(0, "-d",argv,argc) == 0)
+        Disassembler(&MV);
     //
 
     //
     return 0;
 }
 
-int existeParam(int argc, char* argv[]){
-    
-}
 
 void lectura(mv* MV, char* argv[], int tamanio, int TamPS){
 
@@ -341,18 +337,30 @@ int buscaParametroTamanio(int argc, char* argv[]){
         return -1;
 }
 
-int buscaArchivo(int indice, char* ext, char* argv[], int argc){
+int buscaStringArgv(int archivo, char* str, char* argv[], int argc){
     int i=0;
-    if(indice < argc){
-    int len = strlen(argv[indice]);
-    char* extArchivo = {argv[strlen(argv[indice])-4], argv[strlen(argv[indice])-3], argv[strlen(argv[indice])-2], argv[strlen(argv[indice])-1], '\0'};
-    
-        while(i<argc && strcmp(argv[i],ext) != 0){
+    if(!archivo){ //No buscas archivo, buscas un string entero
+        while(i<argc && strcmp(argv[i],str) != 0){
             i++;
         }
+        return i<argc;
     }
-    return i<argc;
-
+    else{
+        int len = strlen(argv[i]);
+        char* extArchivo = {argv[len-4], argv[len-3], argv[len-2], argv[len-1], '\0'}; //La primera vez es mayor que 4 por a.exe
+        while(i<argc &&  strcmp(extArchivo, str) != 0){ //buscas un archivo asi que la idea es extraer la extension                
+                len = strlen(argv[i]);
+                if(len > 4){
+                    extArchivo[0] = argv[i][len-4];
+                    extArchivo[1] = argv[i][len-3];
+                    extArchivo[2] = argv[i][len-2];
+                    extArchivo[3] = argv[i][len-1];
+                    extArchivo[4] = '\0';
+                }
+                i++;
+        }
+        return i*(i<argc); //Si no lo encuentra devuelve 0, si lo encuentra devuelve i
+    }
 }
 
 void cargaRegistrosVMI(mv* MV){
@@ -862,17 +870,17 @@ void SYS (mv* MV, int opA, int opB, char operacion){
             SYSW(MV, puntEdx, CH, CL, AL);
         else{
             if(valorB == 3){
-                SYSR(MV, puntEdx, CH,CL,0); //AL no nos sirve por que el formato es String o char en su defecto
+                SYSTRINGR(MV, puntEdx, ((CH<<8) & 0xFF00) | CL ,0); //AL no nos sirve por que el formato es String o char en su defecto
 
             }
             else if(valorB == 4){
-                //Escribe string
+                SYSTRINGW(MV, puntEdx, ((CH<<8) & 0xFF00) | CL, 0);
             }
             else if(valorB == 7){
                 system("clear");
             }
             else if(valorB == 0xF){
-                //Crea breakpoint
+                SYSF(MV);
             }
                 printf("Error: syscall no implementada\n");
                 STOP(MV, 0, 0, 0); //Error
@@ -1029,8 +1037,7 @@ void EscrFormato(mv* MV, int i,int punt, short int AL, char CH){
     }
 }
 
-void SYSR(mv* MV, int punt, char CH, char CL, short int AL){
-    short int CX = ((CH<<8) & 0xFF00) | CL;
+void SYSTRINGR(mv* MV, int punt, char CX, short int AL){
     char string[CX];
 
     printf("Escribir cadena de %d largo: \n" ,CX);
@@ -1048,10 +1055,31 @@ void SYSR(mv* MV, int punt, char CH, char CL, short int AL){
 //Entiendo esta bien
 }
 
-void guardaString(mv* MV, int punt, char string[]){
+void SYSTRINGW(mv* MV, int punt, char CX, short int AL){
+    char string[CX];
+    for (int i=0; i<CX; i++){
+        printf("%c", (*MV).memoria[punt+i]);
+    }
+    printf("\n");
+}
 
+void SYSF(mv* MV){
+    char *punteroArgv = ValoropST(3, MV->registros[SS], MV); //Devuelve el puntero a memoria
+    int punteroArgc = ValoropST(3, MV->registros[SS] + 4 , MV); //Devuelve el nro de elementos
+    char* ext = ".vmi";
+    int Vmi = buscaStringArgv(1, ext, punteroArgv, punteroArgc);
+    Vmi = punteroArgv[Vmi];
+    FILE *archivo = fopen(Vmi, "r");
+    if(archivo){
+
+    }
+    else{
+        printf("Error, no se pudo abrir el archivo .vmi \n");
+        STOP(MV, 0, 0, 0); //Error
+    }
 }
 ///////
+
 void CAMBIACC (mv* MV, int valor){
     (*MV).registros[CC] &= 0x00000000; //Apaga los bits de estado
     if (valor < 0){
@@ -1251,3 +1279,84 @@ char sectorMemoria(char sector){
             break;
     }
 }
+
+/*
+void MEMORIA(mv MV, int *cont, int *op){
+    short int offset, basereg, inmediato;
+    char codreg;
+    int tamcelda, PosMem, TercerByte;
+
+    //primero se lee un inmediato, dos bytes
+
+    //Funcion INMEDIATO
+    inmediato = MV.memoria[MV.registros[IP] + *cont + 2] & 0x00FF;
+    inmediato = (MV.memoria[MV.registros[IP] + *cont + 1] << 8) | inmediato;
+    *cont += 2;
+    //
+    *cont += 1; //Aumento el contador
+    TercerByte = MV.memoria[MV.registros[IP] + *cont];
+
+    codreg = (TercerByte >> 4) & 0x0F;  //Codigo del registro en el vector
+    tamcelda = TercerByte & 0x03;      
+
+    basereg = MV.registros[codreg] >> 16;
+    offset = MV.registros[codreg] & 0x0000FFFF;
+
+
+    PosMem = MV.TSeg[basereg].Base + offset + inmediato;
+    //*op = MV.memoria[PosMem];
+
+    if (PosMem >= Tamtot) {
+        printf("Error: dirección de memoria fuera de rango\n");
+        STOP(&MV, PosMem, 0, 0);
+    }
+
+    // Shift para obtener espacio para agregar el tamanio de la celda ademas de tener la direccion de memoria.
+    *op = (PosMem << 2) | tamcelda;
+}
+
+
+int ObtenerTamanioCelda(mv MV,int op){
+  
+    switch(op & 0x3){
+      case 0: return 4; //long
+      case 1: {
+               printf ("Error: tamanio de operando no valido");
+               STOP (&MV,0,0,0);
+              }
+      case 2: return 2; //word
+      case 3: return 1; //byte      
+}
+
+
+int ValoropST(int tipo, int op, mv* MV){  //Valor operando Segun Tipo
+    char posReg = (op >> 4) & 0x0F;
+    char sector = (op >> 2) & 0x03;
+    int valor = 0, tamcelda, direccion;
+
+    switch(tipo){
+        case 1: // Registro
+            return getReg(*MV, posReg, sector);  //(mv, direccion en mv.registro, sector) 
+        case 2: // Inmediato
+            return op;
+        case 3: { // Memoria
+            int tamcelda = ObtenerTamanioCelda(op);
+            int direccion = op >> 2;
+            for (int i = 0; i < tamcelda; i++) {
+                valor = (valor << 8) | ((*MV).memoria[direccion + i] & 0xFF);
+            }
+            return valor;
+            break;
+        }
+    }
+}
+
+void setMemoria(mv* MV, int posMem, int valorB){
+    int tamcelda = ObtenerTamanioCelda(posMem);
+    int direccion = posMem >> 2;
+    for(int i=tamcelda-1; i>=0; i--){
+        (*MV).memoria[posMem + i] = (valorB >>((tamcelda-1- i)*8)) & 0xFF;
+    }
+}
+
+*/
