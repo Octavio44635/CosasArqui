@@ -375,10 +375,13 @@ void cargaTablaVMI(mv* MV){
 }
 
 void cargaSS(mv* MV, char* argv[], int argc){
+    
+    (*MV).registros[SP] = (*MV).TSeg[((*MV).registros[SS]>>16) & 0x0000FFFF].Tamanio;
     PUSH(MV, 0, argv, 0b10000000); //creo que esta bien
     PUSH(MV, 0, argc, 0b10000000);
     PUSH(MV, 0, -1, 0b10000000);
 }
+
 void LeeCS (mv *MV){
     void (*Funciones[32])(mv*, int, int, char) = {SYS,JMP,JZ,JP,JZ,JNZ,JNP,JNN,NOT,EMPTY,EMPTY,PUSH,POP,CALL,RET,STOP,MOV,ADD,SUB,SWAP,MUL,DIV,CMP,SHL,SHR,AND,OR,XOR,LDL,LDH,RND,EMPTY};
     void (*FuncOperandos[4])(mv, int *, int *) = {NULO,SACAREGISTRO,INMEDIATO,MEMORIA};
@@ -400,12 +403,12 @@ void LeeCS (mv *MV){
         
         //Deberias sacar los bits
         FuncOperandos[opB](*MV, &cont, &BytesB); //(MV, cont, bytesOp);
-        //Deberias cortar el dato 
+        //Deberias cortar el dato
         
         //En A lo mismo
         FuncOperandos[opA](*MV, &cont, &BytesA);
 
-        
+
         cont++;
         IPaux= IPaux + cont;
         cont = 0;
@@ -768,11 +771,10 @@ void set(mv* MV, int opA, char tipoA, int valorB){
         (*MV).registros[SP]-=4;
         indice=((*MV).registros[SS] >>16) &0x0000FFFF; //Entrada segmento SS
     
-         if (( (*MV).registros[SP]&0x0000FFFF)<(*MV).TSeg[indice].Tamanio){
+        if (( (*MV).registros[SP]&0x0000FFFF)<(*MV).TSeg[indice].Tamanio){
             printf("Error: Stack overflow\n");
             STOP(MV, 0, 0, 0);
         }
-   
         setMemoria(MV,(*MV).registros[SP], valor);  //Guarda valor en la posición SP de memoria[], que está dentro del SS,lo estás guardando en la pila.
     }
 
@@ -788,10 +790,7 @@ void set(mv* MV, int opA, char tipoA, int valorB){
             STOP(MV, 0, 0, 0);
         }
     
-        valor = 0;
-        for (int i = 0; i < 4; i++) {
-             valor = (valor << 8) | (MV->memoria[(*MV).registros[SP] + i] & 0xFF); //Extrae valor de la memoria
-        }
+        valor = ValoropST(3, (*MV).registros[SP], MV); //Extrae valor de la memoria
 
         set(MV, opB, tipoB, valor);  // Escribe valor en el destino.
         (*MV).registros[SP] +=4;  //Incremento SP
@@ -862,11 +861,22 @@ void SYS (mv* MV, int opA, int opB, char operacion){
         if(valorB == 2)
             SYSW(MV, puntEdx, CH, CL, AL);
         else{
-            printf("Error, syscall no valida\n");
-            STOP(MV, 0, 0, 0); //Error
+            if(valorB == 3){
+                SYSR(MV, puntEdx, CH,CL,0); //AL no nos sirve por que el formato es String o char en su defecto
+
+            }
+            else if(valorB == 4){
+                //Escribe string
+            }
+            else if(valorB == 7){
+                system("clear");
+            }
+            else if(valorB == 0xF){
+                //Crea breakpoint
+            }
+                printf("Error: syscall no implementada\n");
+                STOP(MV, 0, 0, 0); //Error
         }
-            
-        //Extender a los nuevos procedimientos
 }
 
 void SYSR(mv* MV, int punt, char CH, char CL, short int AL){
@@ -1019,6 +1029,28 @@ void EscrFormato(mv* MV, int i,int punt, short int AL, char CH){
     }
 }
 
+void SYSR(mv* MV, int punt, char CH, char CL, short int AL){
+    short int CX = ((CH<<8) & 0xFF00) | CL;
+    char string[CX];
+
+    printf("Escribir cadena de %d largo: \n" ,CX);
+    scanf("%s", string);
+
+    if (strlen(string) <= CX){
+        CX = strlen(string);
+    }
+    int i=0;
+    for (;i<CX;i++){
+        MV->memoria[punt+i] = string[i];
+    }
+    MV->memoria[punt+i+1] = '/0';
+
+//Entiendo esta bien
+}
+
+void guardaString(mv* MV, int punt, char string[]){
+
+}
 ///////
 void CAMBIACC (mv* MV, int valor){
     (*MV).registros[CC] &= 0x00000000; //Apaga los bits de estado
@@ -1049,16 +1081,11 @@ void BytesMEMORIA(mv MV, int *cont, int *operando){
 }
 
 void Disassembler(mv* MV){
-    //Hacer flechita que apunta a la instruccion actual
-
-
-
-
     void (*FuncOperandos[4])(mv, int *, int *) = {NULO,SACAREGISTRO,INMEDIATO,BytesMEMORIA};
     int cont=0; //Este contador es para saber cuantos bytes se leyeron
     (*MV).registros[IP]=(*MV).TSeg[0].Base; //IP = CS
 
-    char* nomFun[32] = {"SYS","JMP","JZ","JP","JN","JNZ","JNP","JNN","NOT","","","","","","","STOP","MOV","ADD","SUB","SWAP","MUL","DIV","CMP","SHL","SHR","AND","OR","XOR","LDL","LDH","RND"};
+    char* nomFun[32] = {"SYS","JMP","JZ","JP","JN","JNZ","JNP","JNN","NOT","","","PUSH","POP","CALL","RET","STOP","MOV","ADD","SUB","SWAP","MUL","DIV","CMP","SHL","SHR","AND","OR","XOR","LDL","LDH","RND"};
     while((*MV).registros[IP] < ((*MV).TSeg[0].Base + (*MV).TSeg[0].Tamanio)){
         char instruccion = (*MV).memoria[(*MV).registros[IP]];
         //Ya se mostro la orden, ahora se procede a mostrar los operandos
@@ -1128,13 +1155,13 @@ void Disassembler(mv* MV){
                 printf(" %s, ", EscrReg(*MV, operandoA));
             else
                 if(tipoA == 3)
-                    printf(" %s, ", EscrMem(*MV, operandoA));
+                    printf(" %c%s, ",sectorMemoria(operandoA & 0x03), EscrMem(*MV, operandoA));
                 else
                     printf("");
         if(tipoB == 2){
             short int valor;
             if (operandoB & 0x8000){
-                valor =  (~operandoB) + 1;   //Preguntar
+                valor =  (~operandoB) + 1;
                 printf(" -%d ", valor);
             }
             else{
@@ -1148,7 +1175,7 @@ void Disassembler(mv* MV){
                 printf (" %s ", EscrReg(*MV, operandoB));
             else
                 if(tipoB == 3)
-                    printf (" %s ", EscrMem(*MV, operandoB));
+                    printf (" %c%s ",sectorMemoria(operandoB & 0x03), EscrMem(*MV, operandoB));
                 else
                     printf("");
         printf("\n");
@@ -1188,6 +1215,7 @@ char* EscrReg(mv MV, int operando){
 }
 
 char* EscrMem(mv MV, int operando){
+
     static char palabra[16] = "";
     char  registro=0;
     short int inmediato=0;
@@ -1205,4 +1233,21 @@ char* EscrMem(mv MV, int operando){
     else
         snprintf(palabra, sizeof(palabra), "[%s]", EscrReg(MV, registro));
     return palabra;
+}
+
+char sectorMemoria(char sector){
+    switch(sector){
+        case 0:
+            return ' '; //Muestro l o ''?
+            break;
+        case 1:
+            return 'b';
+            break;
+        case 2:
+            return 'w';
+            break;
+        case 3:
+            return '#'; //Por motivos de seguridad esto va a estar aca hasta el dia de la entrega
+            break;
+    }
 }
