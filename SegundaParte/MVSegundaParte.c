@@ -35,77 +35,93 @@ typedef struct{
 
 typedef struct{
     char memoria[Tamtot];
-    int registros[TamanioRegistros];  //Del elemento 8 al 15 son valores enteros, los demas son referencias a memoria
+    int registros[TamanioRegistros];
     TablaS TSeg[TamanioTablaS];} mv;
 
-void lectura(mv*, char*[], int , int );
+void lectura(mv*, char*[], int, int);
+void lecturaVMI(mv*, int, char*);
 void CargaRegistros(mv*, int[], int);
-
-void SYS(mv*,int, int,char );
-void JMP(mv*,int, int,char );
-void JZ(mv*,int, int,char );
-void JP(mv*,int, int,char );
-void JZ(mv*,int, int,char );
-void JNZ(mv*,int, int,char );
-void JNP(mv*,int, int,char );
-void JNN(mv*,int, int,char );
-void NOT(mv*,int, int,char );
-void EMPTY(mv*,int, int,char );
-void STOP(mv*,int, int,char );
-void MOV(mv*,int, int,char );
-void ADD(mv*,int, int,char );
-void SUB(mv*,int, int,char );
-void SWAP(mv*,int, int,char );
-void MUL(mv*,int, int,char );
-void DIV(mv*,int, int,char );
-void CMP(mv*,int, int,char );
-void SHL(mv*,int, int,char  );
-void SHR(mv*,int, int,char  );
-void AND(mv*,int, int,char );
-void OR(mv*,int, int,char );
-void XOR(mv*,int, int,char  );
-void LDL(mv*,int, int,char  );
-void LDH(mv*,int, int,char );
-void RND(mv*,int, int,char );
-//Declarar las nuevas funciones
-
-
-void SYSR(mv* , int , char , char, short int);
-void SYSW(mv* , int , char, char, short int );
-
+int sumaTamanio(int[]);
+int creaPS(mv*, int, char*[]);
+int buscaParametroTamanio(int, char*[]);
+int buscaStringArgv(int, char*, char*[], int);
+void leeRegistrosVMI(mv*);
+void leeTablaVMI(mv*);
+void cargaSS(mv*, char*[], int);
 void LeeCS(mv*);
+void leeOrdenCS(mv*);
+void SACAREGISTRO(mv, int*, int*);
+void INMEDIATO(mv, int*, int*);
+void MEMORIA(mv, int*, int*);
+void NULO(mv, int*, int*);
+
+void BytesMEMORIA(mv, int*, int*);
 void CAMBIACC(mv*, int);
+int punteroReg(mv, int, int*);
 
-int punteroReg(mv , int , int* );
+void SYS(mv*, int, int, char);
+void SYSR(mv*, int, char, char, short int);
+void SYSW(mv*, int, char, char, short int);
+void SYSTRINGR(mv*, int, short int, short int);
+void SYSTRINGW(mv*, int, short int, short int);
+void SYSF(mv*);
+void EscrFormato(mv*, int, int, short int, char);
+void leeFormato(mv, int*, int, char);
 
-void EscrFormato(mv* , int ,int , short int, char);
-void leeFormato(mv , int *, int , char );
+void MOV(mv*, int, int, char);
+void ADD(mv*, int, int, char);
+void SUB(mv*, int, int, char);
+void MUL(mv*, int, int, char);
+void DIV(mv*, int, int, char);
+void JMP(mv*, int, int, char);
+void JZ(mv*, int, int, char);
+void JP(mv*, int, int, char);
+void JN(mv*, int, int, char);
+void JNZ(mv*, int, int, char);
+void JNP(mv*, int, int, char);
+void JNN(mv*, int, int, char);
+void LDH(mv*, int, int, char);
+void LDL(mv*, int, int, char);
+void RND(mv*, int, int, char);
+void AND(mv*, int, int, char);
+void OR(mv*, int, int, char);
+void XOR(mv*, int, int, char);
+void STOP(mv*, int, int, char);
+void SWAP(mv*, int, int, char);
+void NOT(mv*, int, int, char);
+void SHL(mv*, int, int, char);
+void SHR(mv*, int, int, char);
+void PUSH(mv*, int, int, char);
+void POP(mv*, int, int, char);
+void CALL(mv*, int, int, char);
+void RET(mv*, int, int, char);
+void CMP(mv*, int, int, char);
 
-void SACAREGISTRO(mv, int *, int *);
-void INMEDIATO(mv, int *, int *);
-void MEMORIA(mv, int *, int * );
-void NULO(mv, int *, int *);
-void BytesMEMORIA(mv, int *, int *);
-
-int getReg(mv , char, char);
-
-char* EscrReg(mv , int );
-char* EscrMem(mv , int );
-
-void Disassembler(mv*);
+int getReg(mv, char, char);
+void setReg(mv*, char, char, int);
+int ValoropST(int, int, mv*);
+void set(mv*, int, char, int);
+int ObtenerTamanioCelda(mv, int);
+void setMemoria(mv*, int, int);
+void EMPTY(mv*, int, int, char);
+void Disassembler(mv*, int);
+char* EscrReg(mv, int);
+char* EscrMem(mv, int);
+char sectorMemoria(char);
+int sumaTamaniosTabla(mv*);
 
 int main(int argc, char *argv[]){
     //Las funciones del vector deben recibir los mismos parametros
-mv MV;
-int tamanio, ubicacion=0, TamPS=0;
+    mv MV;
+    int tamanio, ubicacion=0, TamPS=0;
 
-//Busca el parametro m=
-if(argc > 0){
-    tamanio = buscaParametroTamanio(argc, argv); //funcion que busca el tamanio de la memoria
-    if(tamanio<0)
-        tamanio = Tamtot; //Si no se encuentra el tamanio, se asigna 16KiB
-}
-TamPS = creaPS(&MV, argc, argv); //Se asigna el tamanio de la memoria
+    //Busca el parametro m=
+    if(argc > 0){
+        tamanio = buscaParametroTamanio(argc, argv); //funcion que busca el tamanio de la memoria
+        if(tamanio<0)
+            tamanio = Tamtot; //Si no se encuentra el tamanio, se asigna 16KiB
+    }
+    TamPS = creaPS(&MV, argc, argv); //Se asigna el tamanio de la memoria
 
 //Hasta aca todo correcto
     if(buscaStringArgv(1, ".vmx",argv,argc)){ // si hay vmx nada asegura que no haya vmi
@@ -120,12 +136,14 @@ TamPS = creaPS(&MV, argc, argv); //Se asigna el tamanio de la memoria
         lecturaVMI(&MV, tamanio, argv[1]);
 
     //Hay que iniciar el StackSegment
+    int offsetEntry = MV.registros[IP] & 0x0000FFFF;
+
     cargaSS(&MV, argv, argc);
     LeeCS(&MV);
     printf("\n");
 
     if(buscaStringArgv(0, "-d",argv,argc) == 0)
-        Disassembler(&MV);
+        Disassembler(&MV, offsetEntry);
     //
 
     //
@@ -174,10 +192,8 @@ void lectura(mv* MV, char* argv[], int tamanio, int TamPS){
 
         int arregloTamanios[6] = {TamPS, tamCS, tamDS, tamES, tamSS, tamKS}; //Arreglo de tamanios de segmentos
 
-        if(tamanio >= sumaTamanio(arregloTamanios)){
+        if(tamanio >= sumaTamanio(arregloTamanios))
             CargaRegistros(MV, arregloTamanios, offsetEntry);
-
-        }
         else{
             printf("Error, tamanio de memoria insuficiente\n");
             fclose(arch);
@@ -192,10 +208,10 @@ void lectura(mv* MV, char* argv[], int tamanio, int TamPS){
 }
 
 void lecturaVMI(mv* MV, int tamanio, char* arch){
-    FILE *arch = fopen(arch, "rb");
+    FILE *archivo = fopen(arch, "rb");
     char* header = "VMI25";
     int i=0, iguales = 1;
-    if(arch != NULL){
+    if(archivo != NULL){
         fread((*MV).memoria,sizeof(char),8,arch); //Lectura header
         while(i<5 && iguales){
             iguales = (header[i] == (*MV).memoria[i]);
@@ -210,11 +226,11 @@ void lecturaVMI(mv* MV, int tamanio, char* arch){
         if((*MV).memoria[5] == '1'){
             tamanio = ((*MV).memoria[6]&0x00FF) << 8 | ((*MV).memoria[7] & 0x00FF);
         }
-        fread((*MV).memoria+8,sizeof(char),64,arch); //Lectura de la memoria
-        cargaRegistrosVMI(MV);
+        fread((*MV).memoria+8,sizeof(char),64,arch); //Lectura de la memoria para Registros
+        leeRegistrosVMI(MV);
 
-        fread((*MV).memoria + 8,sizeof(char), 32,arch); //Lectura de la memoria
-        cargaTablaVMI(MV);
+        fread((*MV).memoria + 8,sizeof(char), 32,arch); //Lectura de la memoria para Tabla
+        leeTablaVMI(MV);
 
         fread((*MV).memoria + 8,sizeof(char),tamanio,arch); //Lectura de la memoria
 
@@ -363,23 +379,25 @@ int buscaStringArgv(int archivo, char* str, char* argv[], int argc){
     }
 }
 
-void cargaRegistrosVMI(mv* MV){
-    int i=0, pos=9; //parte de la cabecera
+void leeRegistrosVMI(mv* MV){
+    int i=0, pos=8; //parte de la cabecera
     for(i=0; i<TamanioRegistros; i++){
         (*MV).registros[i] = ((*MV).memoria[pos] & 0x00FF) << 24;
         (*MV).registros[i] = (*MV).registros[i] | ((*MV).memoria[pos+1] & 0x00FF) << 16;
         (*MV).registros[i] = (*MV).registros[i] | ((*MV).memoria[pos+2] & 0x00FF) << 8;
         (*MV).registros[i] = (*MV).registros[i] | ((*MV).memoria[pos+3] & 0x00FF);
+        pos += 4;
     }
     //Los registros deberian de estar cargados
 }
 
-void cargaTablaVMI(mv* MV){
+void leeTablaVMI(mv* MV){
     int i=0, pos=8;
-
-
-
-
+    for(;i<8; i++){
+        MV->TSeg[i].Base = ((MV->memoria[pos] & 0x00FF)<< 8) | (MV->memoria[pos+1] & 0x00FF);
+        MV->TSeg[i].Tamanio = ((MV->memoria[pos+2] & 0x00FF)<< 8) | (MV->memoria[pos+3] & 0x00FF);
+        pos += 4;
+    }
 }
 
 void cargaSS(mv* MV, char* argv[], int argc){
@@ -398,10 +416,12 @@ void LeeCS (mv *MV){
     char instruccion;
     int opA,opB,operacion,IPaux, cont=0;
 
-
+    int indiceCS = MV->registros[CS]>>16;
     IPaux=(*MV).registros[IP];
-    while ((*MV).registros[IP]< (*MV).TSeg[0].Tamanio){  //IP <= (*MV).TSeg[0].Tamanio
-        instruccion = (*MV).memoria[IPaux]; //levanto el dato del CS apuntado por IP
+    while ((*MV).registros[IP]< MV->TSeg[indiceCS].Tamanio){  //IP <= (*MV).TSeg[0].Tamanio
+        //Eliminar todo esto si la implementacion es correcta
+        leeOrdenCS(MV);
+        /*instruccion = (*MV).memoria[IPaux]; //levanto el dato del CS apuntado por IP
         opB=(instruccion&0xC0)>>6;    //4 valores, 2 bits
         opA=(instruccion&0x30)>>4;
         operacion=(instruccion &0x1F);
@@ -449,8 +469,63 @@ void LeeCS (mv *MV){
                 STOP(MV, opA, opB, instruccion); //Error
             }
         IPaux = (*MV).registros[IP]; //Graba en el IP la proxima instruccion a leer, importa al hacer jump
+    */
     }
+}
 
+void leeOrdenCS(mv* MV){
+    void (*Funciones[32])(mv*, int, int, char) = {SYS,JMP,JZ,JP,JZ,JNZ,JNP,JNN,NOT,EMPTY,EMPTY,PUSH,POP,CALL,RET,STOP,MOV,ADD,SUB,SWAP,MUL,DIV,CMP,SHL,SHR,AND,OR,XOR,LDL,LDH,RND,EMPTY};
+    void (*FuncOperandos[4])(mv, int *, int *) = {NULO,SACAREGISTRO,INMEDIATO,MEMORIA};
+
+    char instruccion;
+    int opA,opB,operacion, cont=0;
+
+
+    instruccion = (*MV).memoria[MV->registros[IP]]; //levanto el dato del CS apuntado por IP
+    opB=(instruccion&0xC0)>>6;    //4 valores, 2 bits
+    opA=(instruccion&0x30)>>4;
+    operacion=(instruccion &0x1F);
+    //En instruccion la receta de la orden
+    //xx x_x_xxxx
+    int BytesA=0, BytesB=0;
+    
+    //Deberias sacar los bits
+    FuncOperandos[opB](*MV, &cont, &BytesB); //(MV, cont, bytesOp);
+    //Deberias cortar el dato
+    
+    //En A lo mismo
+    FuncOperandos[opA](*MV, &cont, &BytesA);
+
+
+    cont++;
+    MV->registros[IP] += cont;
+    cont = 0;
+    
+    if(operacion >= 0x0 & operacion <= 0x8)//Solo un operando
+        if(opB != 0)//Se usa B, no A. Ignoramos A
+            Funciones[operacion](MV, 0, BytesB, instruccion); //Llama a la funcion correspondiente
+        else{
+            printf("Error, operando B nulo\n");
+            STOP(MV, opA, opB, instruccion); //Error
+        }
+    else
+        if(operacion >= 0x10 & operacion <= 0x1E)
+            if(opA != 0 && opA != 2){
+                if(opB != 0)
+                    Funciones[operacion](MV, BytesA, BytesB, instruccion); //Llama a la funcion correspondiente
+                else{
+                    printf("Error, operando B nulo\n");
+                    STOP(MV, opA, opB, instruccion); //Error
+                }
+            }
+            else{
+                printf("Error, operando A invalido\n");
+                STOP(MV, opA, opB, instruccion); //Error
+            }
+        else{
+            printf("\n Fin de ejecucion");
+            STOP(MV, opA, opB, instruccion); //Error
+        }
 }
 
 void SACAREGISTRO (mv MV,int *cont, int *bytesOp){
@@ -468,7 +543,7 @@ void INMEDIATO (mv MV,int *cont, int *op){
   *op = inmediato;
   *cont += 2; //Aumento el contador
 }
-
+/*
 void MEMORIA (mv MV, int *cont, int *op){
     short int offset, basereg, inmediato;
     char codreg;
@@ -498,6 +573,7 @@ void MEMORIA (mv MV, int *cont, int *op){
         STOP(&MV, *op, 0, 0); //Error
     }
 }
+    */
 
 void NULO (mv MV, int *cont, int *op){
 }
@@ -507,11 +583,13 @@ void EMPTY(mv* MV, int opA, int opB, char operacion){
     STOP(MV, 0, 0, 0); //Error
 }
 
+/*
 void setMemoria(mv* MV, int posMem, int valorB){
     for(int i=3; i>=0; i--){
         (*MV).memoria[posMem+i] = (valorB >> ((3-i)*8)) & 0x00FF;
     }
 }
+    */
 
 void setReg(mv *MV, char posA, char sectorA, int valorB){
     switch(sectorA){
@@ -532,7 +610,7 @@ void setReg(mv *MV, char posA, char sectorA, int valorB){
             break;
     }
 }
-
+/*
 int ValoropST(int tipo, int op, mv* MV){ //Valor operando Segun Tipo
     char posReg = op>>4 & 0x0f;
     char sector = (op>>2) & 0x3;
@@ -552,6 +630,7 @@ int ValoropST(int tipo, int op, mv* MV){ //Valor operando Segun Tipo
             break;
     }
 }
+    */
 
 int getReg(mv MV, char posReg, char sector){
     int valor=0;
@@ -1037,7 +1116,7 @@ void EscrFormato(mv* MV, int i,int punt, short int AL, char CH){
     }
 }
 
-void SYSTRINGR(mv* MV, int punt, char CX, short int AL){
+void SYSTRINGR(mv* MV, int punt, short int CX, short int AL){
     char string[CX];
 
     printf("Escribir cadena de %d largo: \n" ,CX);
@@ -1055,7 +1134,7 @@ void SYSTRINGR(mv* MV, int punt, char CX, short int AL){
 //Entiendo esta bien
 }
 
-void SYSTRINGW(mv* MV, int punt, char CX, short int AL){
+void SYSTRINGW(mv* MV, int punt, short int CX, short int AL){
     char string[CX];
     for (int i=0; i<CX; i++){
         printf("%c", (*MV).memoria[punt+i]);
@@ -1069,14 +1148,45 @@ void SYSF(mv* MV){
     char* ext = ".vmi";
     int Vmi = buscaStringArgv(1, ext, punteroArgv, punteroArgc);
     Vmi = punteroArgv[Vmi];
-    FILE *archivo = fopen(Vmi, "r");
-    if(archivo){
+    FILE *archivo = fopen(Vmi, "wb");
+    char orden='\n';
+    if(orden == '\n'){
+        if(archivo){
+            fwrite(MV->memoria, sizeof(char), 8, archivo);
+            for (int i=0; i<16; i++)
+                fwrite(&MV->registros[i], sizeof(char), 4, archivo);
+            for (int i=0; i<8; i++)
+                fwrite(&MV->TSeg[i].Base + MV->TSeg[i].Tamanio, sizeof(char), 8, archivo);
+            fwrite(&MV->memoria, sizeof(char), sumaTamaniosTabla(MV), archivo);
+            fclose(archivo);
+        }
+        else{
+            printf("Error, no se pudo abrir el archivo .vmi \n");
+            STOP(MV, 0, 0, 0); //Error
+        }
+        printf("Inserte orden para continuar: g, q o enter\n");
 
+        scanf("%c", orden);
+        if(orden == 'g'){
+            //no hace nada
+        }
+        else if(orden == 'q'){
+            printf("Programa finalizado\n");
+            STOP(MV, 0, 0, 0);
+
+        }else if(orden == '\n')
+            leeOrdenCS(MV);
+        else
+            printf("caracter invalido \n");
     }
-    else{
-        printf("Error, no se pudo abrir el archivo .vmi \n");
-        STOP(MV, 0, 0, 0); //Error
+}
+
+int sumaTamaniosTabla(mv* MV){
+    int suma=0;
+    for (int i=0; i<TamanioTablaS; i++){
+        suma += (*MV).TSeg[i].Tamanio;
     }
+    return suma;
 }
 ///////
 
@@ -1108,22 +1218,27 @@ void BytesMEMORIA(mv MV, int *cont, int *operando){
     *operando = todo;
 }
 
-void Disassembler(mv* MV){
+void Disassembler(mv* MV, int offset){
     void (*FuncOperandos[4])(mv, int *, int *) = {NULO,SACAREGISTRO,INMEDIATO,BytesMEMORIA};
     int cont=0; //Este contador es para saber cuantos bytes se leyeron
     (*MV).registros[IP]=(*MV).TSeg[0].Base; //IP = CS
 
     char* nomFun[32] = {"SYS","JMP","JZ","JP","JN","JNZ","JNP","JNN","NOT","","","PUSH","POP","CALL","RET","STOP","MOV","ADD","SUB","SWAP","MUL","DIV","CMP","SHL","SHR","AND","OR","XOR","LDL","LDH","RND"};
-    while((*MV).registros[IP] < ((*MV).TSeg[0].Base + (*MV).TSeg[0].Tamanio)){
+    
+    int indiceCS = (*MV).registros[CS] >> 16; //Entrada Tabla Segmentos
+    while((*MV).registros[IP] < (*MV).TSeg[indiceCS].Base + (*MV).TSeg[indiceCS].Tamanio){
         char instruccion = (*MV).memoria[(*MV).registros[IP]];
         //Ya se mostro la orden, ahora se procede a mostrar los operandos
         char tipoA = (instruccion >> 4) & 0x3, operacion = instruccion & 0x1F,tipoB = (instruccion >> 6) & 0x3;
         int operandoA, operandoB, i;
         instruccion = instruccion & 0x00FF;
         //El tamaño y el tipo son iguales
+
+        if(MV->registros[IP] == offset)
+            printf(">");
         FuncOperandos[tipoB](*MV, &cont, &operandoB);
         FuncOperandos[tipoA](*MV, &cont, &operandoA);
-        
+
         printf("[%04X] %02X ", (*MV).registros[IP], instruccion&0x00FF);
 
         (*MV).registros[IP] += cont+1;
@@ -1279,8 +1394,8 @@ char sectorMemoria(char sector){
             break;
     }
 }
+//Codigos de Luciano, por lo visto estan bien pero hay que hacer pruebas
 
-/*
 void MEMORIA(mv MV, int *cont, int *op){
     short int offset, basereg, inmediato;
     char codreg;
@@ -1297,7 +1412,7 @@ void MEMORIA(mv MV, int *cont, int *op){
     TercerByte = MV.memoria[MV.registros[IP] + *cont];
 
     codreg = (TercerByte >> 4) & 0x0F;  //Codigo del registro en el vector
-    tamcelda = TercerByte & 0x03;      
+    tamcelda = TercerByte & 0x03;
 
     basereg = MV.registros[codreg] >> 16;
     offset = MV.registros[codreg] & 0x0000FFFF;
@@ -1315,19 +1430,17 @@ void MEMORIA(mv MV, int *cont, int *op){
     *op = (PosMem << 2) | tamcelda;
 }
 
-
 int ObtenerTamanioCelda(mv MV,int op){
   
     switch(op & 0x3){
       case 0: return 4; //long
-      case 1: {
-               printf ("Error: tamanio de operando no valido");
-               STOP (&MV,0,0,0);
-              }
+      case 1:
+            printf ("Error: tamanio de operando no valido");
+            STOP (&MV,0,0,0);
       case 2: return 2; //word
-      case 3: return 1; //byte      
+      case 3: return 1; //byte
+    }
 }
-
 
 int ValoropST(int tipo, int op, mv* MV){  //Valor operando Segun Tipo
     char posReg = (op >> 4) & 0x0F;
@@ -1340,23 +1453,20 @@ int ValoropST(int tipo, int op, mv* MV){  //Valor operando Segun Tipo
         case 2: // Inmediato
             return op;
         case 3: { // Memoria
-            int tamcelda = ObtenerTamanioCelda(op);
+            int tamcelda = ObtenerTamanioCelda(*MV, op);
             int direccion = op >> 2;
             for (int i = 0; i < tamcelda; i++) {
                 valor = (valor << 8) | ((*MV).memoria[direccion + i] & 0xFF);
             }
             return valor;
-            break;
         }
     }
 }
 
 void setMemoria(mv* MV, int posMem, int valorB){
-    int tamcelda = ObtenerTamanioCelda(posMem);
+    int tamcelda = ObtenerTamanioCelda(*MV, posMem);
     int direccion = posMem >> 2;
     for(int i=tamcelda-1; i>=0; i--){
         (*MV).memoria[posMem + i] = (valorB >>((tamcelda-1- i)*8)) & 0xFF;
     }
 }
-
-*/
