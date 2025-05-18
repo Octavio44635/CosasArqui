@@ -114,26 +114,32 @@ int main(int argc, char *argv[]){
     //Las funciones del vector deben recibir los mismos parametros
     mv MV;
     int tamanio, ubicacion=0, TamPS=0;
-
+    int posVMX =buscaStringArgv(1, ".vmx", argv, argc);
+    printf("posVMX: %d", posVMX);
+    int posVMI=buscaStringArgv(1, ".vmi", argv, argc);
+    printf("posVMI: %d", posVMI);
     //Busca el parametro m=
     if(argc > 0){
         tamanio = buscaParametroTamanio(argc, argv); //funcion que busca el tamanio de la memoria
         if(tamanio<0)
             tamanio = Tamtot; //Si no se encuentra el tamanio, se asigna 16KiB
     }
+    printf("PrevioPS");
     TamPS = creaPS(&MV, argc, argv); //Se asigna el tamanio de la memoria
+    printf("TamPS: %d\n", TamPS);
 
 //Hasta aca todo correcto
-    if(buscaStringArgv(1, ".vmx",argv,argc)){ // si hay vmx nada asegura que no haya vmi
+    printf("posVMX: %d\n", posVMX);
+    if(posVMX){ // si hay vmx nada asegura que no haya vmi
+        printf("entro en vmx, %d", posVMX);
         lectura (&MV, argv, tamanio, TamPS); //Llamada a la funcion lectura
         for(int i=0; i<TamPS;i++){
             printf("%02X %d %c\n", MV.memoria[i], MV.memoria[i], MV.memoria[i]);
         }
-        printf("entro en vmx");
 
     }
-    else if(buscaStringArgv(1, ".vmi",argv,argc) && !buscaStringArgv(1, ".vmx",argv,argc)) //Si esto da verdadero es por que no hay vmx
-        lecturaVMI(&MV, tamanio, argv[1]);
+    else if(posVMI && !posVMX) //Si esto da verdadero es por que no hay vmx
+        lecturaVMI(&MV, tamanio, argv[posVMI]);
 
     //Hay que iniciar el StackSegment
     int offsetEntry = MV.registros[IP] & 0x0000FFFF;
@@ -212,31 +218,31 @@ void lecturaVMI(mv* MV, int tamanio, char* arch){
     char* header = "VMI25";
     int i=0, iguales = 1;
     if(archivo != NULL){
-        fread((*MV).memoria,sizeof(char),8,arch); //Lectura header
+        fread((*MV).memoria,sizeof(char),8,archivo); //Lectura header
         while(i<5 && iguales){
             iguales = (header[i] == (*MV).memoria[i]);
             i++;
         }
         if(!iguales){
             printf("Error, cabecera no valida\n");
-            fclose(arch);
+            fclose(archivo);
             STOP(MV, 0, 0, 0); //Error
         }
 
         if((*MV).memoria[5] == '1'){
             tamanio = ((*MV).memoria[6]&0x00FF) << 8 | ((*MV).memoria[7] & 0x00FF);
         }
-        fread((*MV).memoria+8,sizeof(char),64,arch); //Lectura de la memoria para Registros
+        fread(&MV->memoria+8,sizeof(char),64,archivo); //Lectura de la memoria para Registros
         leeRegistrosVMI(MV);
 
-        fread((*MV).memoria + 8,sizeof(char), 32,arch); //Lectura de la memoria para Tabla
+        fread(&MV->memoria + 8,sizeof(char), 32,archivo); //Lectura de la memoria para Tabla
         leeTablaVMI(MV);
 
-        fread((*MV).memoria + 8,sizeof(char),tamanio,arch); //Lectura de la memoria
+        fread(&MV->memoria + 8,sizeof(char),tamanio,archivo); //Lectura de la memoria
 
         //Deberia estar todo correctamente cargado aca
 
-        fclose(arch);
+        fclose(archivo);
     }
     else
         printf("Error al abrir el archivo\n");
@@ -301,6 +307,7 @@ int creaPS(mv* MV, int argc, char *argv[]){
     int acum=0;
     int i=0;
     int j=0;
+    printf("Entra PS");
     while(i<argc && strcmp(argv[i],"-p") != 0){
         i++;
     }
@@ -327,7 +334,7 @@ int creaPS(mv* MV, int argc, char *argv[]){
             puntero += strlen(argv[i]) + 1; // +2 por el /0 y pasa al espacio sig, es lo mismo que hacerle un or
         }
     }
-
+    printf("Tamanio PS: %d\n", acum);
     return acum;
     
 }
@@ -346,7 +353,7 @@ int buscaParametroTamanio(int argc, char* argv[]){
             j++;
             tamanio *= 10;
         }
-
+        printf("Tamanio true %d\n", tamanio);
         return tamanio/10;
     }
     else
@@ -363,18 +370,19 @@ int buscaStringArgv(int archivo, char* str, char* argv[], int argc){
     }
     else{
         int len = strlen(argv[i]);
-        char* extArchivo = {argv[len-4], argv[len-3], argv[len-2], argv[len-1], '\0'}; //La primera vez es mayor que 4 por a.exe
-        while(i<argc &&  strcmp(extArchivo, str) != 0){ //buscas un archivo asi que la idea es extraer la extension                
-                len = strlen(argv[i]);
-                if(len > 4){
-                    extArchivo[0] = argv[i][len-4];
-                    extArchivo[1] = argv[i][len-3];
-                    extArchivo[2] = argv[i][len-2];
-                    extArchivo[3] = argv[i][len-1];
-                    extArchivo[4] = '\0';
-                }
-                i++;
+        char* extArchivo = malloc(5*sizeof(char));
+        do{
+            if(i<argc && strlen(argv[i]) > 4){
+                extArchivo[0] = argv[i][len-4];
+                extArchivo[1] = argv[i][len-3];
+                extArchivo[2] = argv[i][len-2];
+                extArchivo[3] = argv[i][len-1];
+                extArchivo[0] = '\0';
+            }
         }
+        while(i++<argc &&  strcmp(extArchivo, str) != 0);
+        printf("salida: %d", i*(i<argc));
+        free(extArchivo);
         return i*(i<argc); //Si no lo encuentra devuelve 0, si lo encuentra devuelve i
     }
 }
@@ -403,7 +411,8 @@ void leeTablaVMI(mv* MV){
 void cargaSS(mv* MV, char* argv[], int argc){
     
     (*MV).registros[SP] = (*MV).TSeg[((*MV).registros[SS]>>16) & 0x0000FFFF].Tamanio;
-    PUSH(MV, 0, argv, 0b10000000); //creo que esta bien
+    
+    PUSH(MV, 0, (int)argv, 0b10000000); //creo que esta bien   
     PUSH(MV, 0, argc, 0b10000000);
     PUSH(MV, 0, -1, 0b10000000);
 }
@@ -1148,7 +1157,7 @@ void SYSF(mv* MV){
     char* ext = ".vmi";
     int Vmi = buscaStringArgv(1, ext, punteroArgv, punteroArgc);
     Vmi = punteroArgv[Vmi];
-    FILE *archivo = fopen(Vmi, "wb");
+    FILE *archivo = fopen((char *) Vmi, "wb");
     char orden='\n';
     if(orden == '\n'){
         if(archivo){
