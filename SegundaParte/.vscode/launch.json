@@ -1,15 +1,26 @@
-{
+
     // Use IntelliSense to learn about possible attributes.
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    {
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "by-gdb",
+            "name": "Debug MVSegundaParte",
+            "type": "cppdbg",
             "request": "launch",
-            "name": "Launch(gdb)",
-            "program": "$C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/SegundaParte/MVSegundaParte.c",
-            "cwd": "${workspaceRoot}"
+            "program": "${workspaceFolder}/MVSegundaParte.exe",
+            "args": [
+                "C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/SegundaParte/Archivos/alloc25.vmx",
+                "-p",
+                "pal1",
+                "pal2"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": true,
+            "MIMode": "gdb"
         }
     ]
 }

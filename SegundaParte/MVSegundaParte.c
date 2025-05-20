@@ -24,14 +24,14 @@
 
 #define Tamtot 16384 //16KiB
 #define TamanioRegistros 16
-#define TamanioTablaS 6 //Tamaño maximo = 6
+#define TamanioTablaS 8
 
 
 typedef struct{
    short int Base;
    short int Tamanio;
 }TablaS;
- 
+
 
 typedef struct{
     char memoria[Tamtot];
@@ -40,7 +40,7 @@ typedef struct{
 
 void lectura(mv*, char*[], int, int);
 void lecturaVMI(mv*, int, char*);
-void CargaRegistros(mv*, int[], int);
+void CargaRegistros(mv*, int[], int, int);
 int sumaTamanio(int[]);
 int creaPS(mv*, int, char*[]);
 int buscaParametroTamanio(int, char*[]);
@@ -57,7 +57,7 @@ void NULO(mv, int*, int*);
 
 void BytesMEMORIA(mv, int*, int*);
 void CAMBIACC(mv*, int);
-int punteroReg(mv, int, int*);
+void punteroReg(mv, int, int*);
 
 void SYS(mv*, int, int, char);
 void SYSR(mv*, int, char, char, short int);
@@ -115,37 +115,32 @@ int main(int argc, char *argv[]){
     mv MV;
     int tamanio, ubicacion=0, TamPS=0;
     int posVMX =buscaStringArgv(1, ".vmx", argv, argc);
-    printf("posVMX: %d", posVMX);
+    printf("posVMX: %d \n", posVMX);
     int posVMI=buscaStringArgv(1, ".vmi", argv, argc);
-    printf("posVMI: %d", posVMI);
+    printf("posVMI: %d\n", posVMI);
     //Busca el parametro m=
-    if(argc > 0){
-        tamanio = buscaParametroTamanio(argc, argv); //funcion que busca el tamanio de la memoria
-        if(tamanio<0)
-            tamanio = Tamtot; //Si no se encuentra el tamanio, se asigna 16KiB
-    }
-    printf("PrevioPS");
-    TamPS = creaPS(&MV, argc, argv); //Se asigna el tamanio de la memoria
-    printf("TamPS: %d\n", TamPS);
+    tamanio = buscaParametroTamanio(argc, argv);
+    if(tamanio<0)
+        tamanio = Tamtot;
 
-//Hasta aca todo correcto
-    printf("posVMX: %d\n", posVMX);
-    if(posVMX){ // si hay vmx nada asegura que no haya vmi
-        printf("entro en vmx, %d", posVMX);
-        lectura (&MV, argv, tamanio, TamPS); //Llamada a la funcion lectura
-        for(int i=0; i<TamPS;i++){
-            printf("%02X %d %c\n", MV.memoria[i], MV.memoria[i], MV.memoria[i]);
-        }
+    printf("Tamanio: %d\n", tamanio);
+    TamPS = creaPS(&MV, argc, argv);
+
+    for(int i=0; i<TamPS;i++)
+        printf("%02X %c \n", MV.memoria[i], MV.memoria[i]);
+
+    if(posVMX){
+        printf("entro en vmx, %d \n", posVMX);
+        lectura (&MV, argv, tamanio, TamPS);
 
     }
     else if(posVMI && !posVMX) //Si esto da verdadero es por que no hay vmx
         lecturaVMI(&MV, tamanio, argv[posVMI]);
 
-    //Hay que iniciar el StackSegment
     int offsetEntry = MV.registros[IP] & 0x0000FFFF;
 
     cargaSS(&MV, argv, argc);
-    LeeCS(&MV);
+    //LeeCS(&MV);
     printf("\n");
 
     if(buscaStringArgv(0, "-d",argv,argc) == 0)
@@ -176,18 +171,18 @@ void lectura(mv* MV, char* argv[], int tamanio, int TamPS){
             fclose(arch);
             STOP(MV, 0, 0, 0); //Error
         }
-        
+
         int tamCS = (((*MV).memoria[6]&0x00FF) << 8 )| ((*MV).memoria[7] & 0x00FF);
         //Vector de registros
-        
-        
+
+
         //Llamados segun la version
         if((*MV).memoria[5] == '1'){
             fread((*MV).memoria,sizeof(char),tamCS,arch);
             fclose(arch);
         }
         else{
-            fread((*MV).memoria,sizeof(char),10,arch); //Lectura de la cabecera de Archivo VMX
+            fread((*MV).memoria+8,sizeof(char),10,arch); //Lectura de la cabecera de Archivo VMX
             tamDS = (((*MV).memoria[8]&0x00FF) << 8 )| ((*MV).memoria[9] & 0x00FF);
             tamES = (((*MV).memoria[10]&0x00FF) << 8 )| ((*MV).memoria[11] & 0x00FF);
             tamSS = (((*MV).memoria[12]&0x00FF) << 8 )| ((*MV).memoria[13] & 0x00FF);
@@ -195,22 +190,26 @@ void lectura(mv* MV, char* argv[], int tamanio, int TamPS){
             offsetEntry = ((*MV).memoria[16]&0x00FF) << 8 | ((*MV).memoria[17] & 0x00FF);
         }
 
+        for(int i=8; i<18; i++){
+            printf("i: %d ; memoria: %02X \n",i, MV->memoria[i]);
+        }
 
-        int arregloTamanios[6] = {TamPS, tamCS, tamDS, tamES, tamSS, tamKS}; //Arreglo de tamanios de segmentos
+        int arregloTamanios[6] = {TamPS,tamKS, tamCS, tamDS, tamES, tamSS}; //Arreglo de tamanios de segmentos
+        printf("Tamanios: %d %d %d %d %d %d\n", arregloTamanios[0], arregloTamanios[1], arregloTamanios[2], arregloTamanios[3], arregloTamanios[4], arregloTamanios[5]);
 
         if(tamanio >= sumaTamanio(arregloTamanios))
-            CargaRegistros(MV, arregloTamanios, offsetEntry);
+            CargaRegistros(MV, arregloTamanios, offsetEntry, tamanio);
         else{
             printf("Error, tamanio de memoria insuficiente\n");
             fclose(arch);
             STOP(MV, 0, 0, 0); //Error
         }
 
-        
+
     }
     else
         printf("Error al abrir el archivo\n");
-    
+
 }
 
 void lecturaVMI(mv* MV, int tamanio, char* arch){
@@ -248,9 +247,8 @@ void lecturaVMI(mv* MV, int tamanio, char* arch){
         printf("Error al abrir el archivo\n");
 }
 
-void CargaRegistros(mv* MV, int ArregloTamanios[], int offsetEntry){
-    int j=0, param;
-    int i;
+void CargaRegistros(mv* MV, int ArregloTamanios[], int offsetEntry, int tamanio){
+    int j=0, param,i,suma=0;
 
     (*MV).registros[CS] = -1;
     (*MV).registros[DS] = -1;
@@ -268,36 +266,58 @@ void CargaRegistros(mv* MV, int ArregloTamanios[], int offsetEntry){
     (*MV).registros[EDX] = 0;
     (*MV).registros[EEX] = 0;
     (*MV).registros[EFX] = 0;
-    int suma=0;
-    for(i=0; i<TamanioTablaS; i++){
 
-        if(ArregloTamanios[i] != 0){
-            (*MV).TSeg[i].Base = suma;
-            suma += ArregloTamanios[i];
-            (*MV).TSeg[i].Tamanio = ArregloTamanios[i];
-            j++;
+    for(i=0; i<TamanioTablaS; i++){
+        if(i<6){
+            if(ArregloTamanios[i] > 0){
+                (*MV).TSeg[j].Base = suma;
+                suma += ArregloTamanios[i];
+                (*MV).TSeg[j].Tamanio = ArregloTamanios[i];
+                j++;
+            }
+        }
+        else{
+            (*MV).TSeg[i].Base = -1;
+            (*MV).TSeg[i].Tamanio = 0;
         }
 
     }
     i=(ArregloTamanios[0] > 0);
-    if(ArregloTamanios[KS+1] != 0)
-        (*MV).registros[KS] = (((*MV).TSeg[i++].Base<<16) & 0xFFFF0000) | (ArregloTamanios[KS+1] & 0x0000FFFF);
-    if(ArregloTamanios[CS+1] != 0)
-        (*MV).registros[CS] = (((*MV).TSeg[i++].Base<<16) & 0xFFFF0000) | (ArregloTamanios[CS+1] & 0x0000FFFF);
-    if(ArregloTamanios[DS+1] != 0)
-        (*MV).registros[DS] = (((*MV).TSeg[i++].Base<<16) & 0xFFFF0000) | (ArregloTamanios[DS+1] & 0x0000FFFF);
-    if(ArregloTamanios[ES+1] != 0)
-        (*MV).registros[ES] = (((*MV).TSeg[i++].Base<<16) & 0xFFFF0000) | (ArregloTamanios[ES+1] & 0x0000FFFF);
-    if(ArregloTamanios[SS+1] != 0)
-        (*MV).registros[SS] = (((*MV).TSeg[i++].Base<<16) & 0xFFFF0000) | (ArregloTamanios[SS+1] & 0x0000FFFF);
+    if(ArregloTamanios[1]>0){
+        (*MV).registros[KS] = ((i++ <<16)& 0xFFFF0000);
+
+    }
+    if(ArregloTamanios[CS+2] != 0)
+        (*MV).registros[CS] = ((i++<<16) & 0xFFFF0000);
+    if(ArregloTamanios[DS+2] != 0)
+        (*MV).registros[DS] = ((i++<<16) & 0xFFFF0000);
+    if(ArregloTamanios[ES+2] != 0)
+        (*MV).registros[ES] = ((i++<<16) & 0xFFFF0000);
+    if(ArregloTamanios[SS+2] != 0){
+        (*MV).registros[SS] = ((i<<16) & 0xFFFF0000);
+        (*MV).registros[SP] = ((i<<16) & 0xFFFF0000 | (*MV).TSeg[SS].Tamanio);
+    }
+    for(;j<TamanioTablaS; j++){
+            (*MV).TSeg[j].Base = -1;
+            (*MV).TSeg[j].Tamanio = 0;
+        }
 
     (*MV).registros[IP]=(*MV).registros[CS] | offsetEntry; // Inicializacion IP
 
+    printf("Registros: \n");
+    for(i=0; i<7; i++){
+        printf("Registro %d: %08X \n", i, (*MV).registros[i]);
+    }
+
+    printf("Tabla: \n");
+    for(i=0; i<7; i++){
+        printf("Indice %d: %04X %04X \n", i, (*MV).TSeg[i].Base, (*MV).TSeg[i].Tamanio);
+    }
 }
 
 int sumaTamanio(int arreglo[]){
     int suma=0;
-    for(int i=0; i<TamanioTablaS; i++){
+    for(int i=0; i<TamanioTablaS-2; i++){
         suma += arreglo[i];
     }
     return suma;
@@ -307,15 +327,13 @@ int creaPS(mv* MV, int argc, char *argv[]){
     int acum=0;
     int i=0;
     int j=0;
-    printf("Entra PS");
     while(i<argc && strcmp(argv[i],"-p") != 0){
         i++;
     }
-    i++;
-    
-    int nroPal = argc - i;
+    int nroPal = argc - i - 1;
+    i = argc - nroPal;
     while(i<argc){
-        for (j=0; j<strlen(argv[i]); j++){ //suma 5 por que en el param hay que guardar su /0 y su puntero
+        for (j=0; j<strlen(argv[i]); j++){
             (*MV).memoria[acum+j] = argv[i][j];
         }
         acum += j;
@@ -323,20 +341,19 @@ int creaPS(mv* MV, int argc, char *argv[]){
         acum++;
         i++;
     }
+    //Hasta aca estan las palabras
     //asignacion de punteros
-    if(i<argc){
-        int puntero = 0;
-        for (int i=0; i<nroPal; i++){
+    int puntero = 0;
+        for (i=argc - nroPal; i<argc; i++){
             for (j=0; j<4;j++){
                 (*MV).memoria[acum+j] = (puntero >> ((3-j)*8)) & 0x00FF; //Guarda el puntero en la memoria
             }
             acum += 4;
-            puntero += strlen(argv[i]) + 1; // +2 por el /0 y pasa al espacio sig, es lo mismo que hacerle un or
+            puntero += strlen(argv[i])+1;
+
         }
-    }
-    printf("Tamanio PS: %d\n", acum);
     return acum;
-    
+
 }
 
 int buscaParametroTamanio(int argc, char* argv[]){
@@ -369,19 +386,23 @@ int buscaStringArgv(int archivo, char* str, char* argv[], int argc){
         return i<argc;
     }
     else{
-        int len = strlen(argv[i]);
+        int len;
         char* extArchivo = malloc(5*sizeof(char));
-        do{
-            if(i<argc && strlen(argv[i]) > 4){
+        while(i<argc && strcmp(str, extArchivo)){
+            len = strlen(argv[i]);
+
+            if(len>4){
                 extArchivo[0] = argv[i][len-4];
                 extArchivo[1] = argv[i][len-3];
                 extArchivo[2] = argv[i][len-2];
                 extArchivo[3] = argv[i][len-1];
-                extArchivo[0] = '\0';
+                extArchivo[4] = '\0';
+                if(strcmp(extArchivo,str) != 0)
+                    i++;
             }
+            else
+                i++;
         }
-        while(i++<argc &&  strcmp(extArchivo, str) != 0);
-        printf("salida: %d", i*(i<argc));
         free(extArchivo);
         return i*(i<argc); //Si no lo encuentra devuelve 0, si lo encuentra devuelve i
     }
@@ -409,12 +430,19 @@ void leeTablaVMI(mv* MV){
 }
 
 void cargaSS(mv* MV, char* argv[], int argc){
+
     
-    (*MV).registros[SP] = (*MV).TSeg[((*MV).registros[SS]>>16) & 0x0000FFFF].Tamanio;
-    
-    PUSH(MV, 0, (int)argv, 0b10000000); //creo que esta bien   
+
+    PUSH(MV, 0, argv, 0b10000000);
     PUSH(MV, 0, argc, 0b10000000);
     PUSH(MV, 0, -1, 0b10000000);
+
+    printf("SS \n");
+    int i=0;
+    while(MV->registros[SP]&0x0000FFFF < MV->TSeg[MV->registros[SS]>>16].Tamanio){
+        printf("SP: %04X \n", MV->registros[SP+i++]&0x0000FFFF);
+
+    }
 }
 
 void LeeCS (mv *MV){
@@ -437,11 +465,11 @@ void LeeCS (mv *MV){
         //En instruccion la receta de la orden
         //xx x_x_xxxx
         int BytesA=0, BytesB=0;
-        
+
         //Deberias sacar los bits
         FuncOperandos[opB](*MV, &cont, &BytesB); //(MV, cont, bytesOp);
         //Deberias cortar el dato
-        
+
         //En A lo mismo
         FuncOperandos[opA](*MV, &cont, &BytesA);
 
@@ -449,9 +477,9 @@ void LeeCS (mv *MV){
         cont++;
         IPaux= IPaux + cont;
         cont = 0;
-        
+
         (*MV).registros[IP]=IPaux; //Graba en el IP la proxima instruccion a leer
-        
+
         if(operacion >= 0x0 & operacion <= 0x8)//Solo un operando
             if(opB != 0)//Se usa B, no A. Ignoramos A
                 Funciones[operacion](MV, 0, BytesB, instruccion); //Llama a la funcion correspondiente
@@ -497,11 +525,11 @@ void leeOrdenCS(mv* MV){
     //En instruccion la receta de la orden
     //xx x_x_xxxx
     int BytesA=0, BytesB=0;
-    
+
     //Deberias sacar los bits
     FuncOperandos[opB](*MV, &cont, &BytesB); //(MV, cont, bytesOp);
     //Deberias cortar el dato
-    
+
     //En A lo mismo
     FuncOperandos[opA](*MV, &cont, &BytesA);
 
@@ -509,7 +537,7 @@ void leeOrdenCS(mv* MV){
     cont++;
     MV->registros[IP] += cont;
     cont = 0;
-    
+
     if(operacion >= 0x0 & operacion <= 0x8)//Solo un operando
         if(opB != 0)//Se usa B, no A. Ignoramos A
             Funciones[operacion](MV, 0, BytesB, instruccion); //Llama a la funcion correspondiente
@@ -541,7 +569,7 @@ void SACAREGISTRO (mv MV,int *cont, int *bytesOp){
     *bytesOp=0;
     *cont += 1;
     *bytesOp = MV.memoria[MV.registros[IP] + *cont];
-    
+
 }
 
 void INMEDIATO (mv MV,int *cont, int *op){
@@ -823,7 +851,7 @@ void set(mv* MV, int opA, char tipoA, int valorB){
         set(MV, opA, tipoA, ValoropST(tipoB, opB, MV));
         set(MV, opB, tipoB, aux);
         }
-        
+
     }
 
     void NOT (mv* MV, int opA, int opB, char operacion){
@@ -836,7 +864,7 @@ void set(mv* MV, int opA, char tipoA, int valorB){
         char tipoA=(operacion >> 4) & 0x3;
         int valorB = ValoropST((operacion>>6) & 0x3, opB, MV);
         int aux = ValoropST(tipoA, opA, MV)<< valorB;
-        
+
         set(MV, opA, tipoA, aux);
         CAMBIACC(MV,aux);
     }
@@ -851,7 +879,7 @@ void set(mv* MV, int opA, char tipoA, int valorB){
             valorB|= mascara;
         }
         */
-        
+
         int base = ceil(log(valorB)/log(2));
         valorA = valorA << (32-base);
         valorA = valorA >> (32-base+valorB);
@@ -866,12 +894,16 @@ void set(mv* MV, int opA, char tipoA, int valorB){
 
         (*MV).registros[SP]-=4;
         indice=((*MV).registros[SS] >>16) &0x0000FFFF; //Entrada segmento SS
-    
-        if (( (*MV).registros[SP]&0x0000FFFF)<(*MV).TSeg[indice].Tamanio){
+
+        if ((MV->registros[SP]&0x0000FFFF) <= 0){
             printf("Error: Stack overflow\n");
             STOP(MV, 0, 0, 0);
         }
-        setMemoria(MV,(*MV).registros[SP], valor);  //Guarda valor en la posición SP de memoria[], que está dentro del SS,lo estás guardando en la pila.
+        int punteroSP=0;
+        punteroReg(*MV, MV->registros[SP], &punteroSP);
+        printf("PUSH: %08X \n", punteroSP);
+        setMemoria(MV,punteroSP, valor);  //Guarda valor en la posición SP de memoria[], que está dentro del SS,lo estás guardando en la pila.
+        //printf("PUSH: %08X \n", MV->memoria[MV->registros[SP]]);
     }
 
     void POP (mv* MV, int opA, int opB, char operacion){
@@ -885,7 +917,7 @@ void set(mv* MV, int opA, char tipoA, int valorB){
             printf("Error: Stack underflow\n");
             STOP(MV, 0, 0, 0);
         }
-    
+
         valor = ValoropST(3, (*MV).registros[SP], MV); //Extrae valor de la memoria
 
         set(MV, opB, tipoB, valor);  // Escribe valor en el destino.
@@ -895,11 +927,11 @@ void set(mv* MV, int opA, char tipoA, int valorB){
     void CALL (mv* MV, int opA, int opB, char operacion){
         char tipoB= (operacion>>6) & 0x3;
         int Dirdestino= ValoropST(tipoB,opB,MV); //Direccion a la que salta
-    
+
         //IP apunta ya a la direccion a la siguiente direccion.
-    
+
          PUSH (MV,0,(*MV).registros[IP], 0x80); //preguntar eso del 0x8 q no lo entiendo.
-    
+
          //Salto
         JMP(MV, 0, Dirdestino, 0);
     }
@@ -920,11 +952,11 @@ void set(mv* MV, int opA, char tipoA, int valorB){
         int valorB=ValoropST(tipoB, opB, MV);
         CAMBIACC(MV, valorA-valorB);
     }
-    
+
 
 
 ////////
-int punteroReg(mv MV, int dirReg, int* op){
+void punteroReg(mv MV, int dirReg, int* op){
 
     short int basereg = MV.registros[dirReg] >> 16;
     short int offset= MV.registros[dirReg] & 0x0000FFFF;
@@ -933,7 +965,7 @@ int punteroReg(mv MV, int dirReg, int* op){
     *op = MV.TSeg[basereg].Base + offset;
 
 }
-    
+
 void SYS (mv* MV, int opA, int opB, char operacion){
     //SYS
     int valorB = ValoropST((operacion >> 6) & 0x03,opB , MV); //Se almacena el valor de B
@@ -1049,7 +1081,7 @@ void EscrFormato(mv* MV, int i,int punt, short int AL, char CH){
     int escritura = 0;
     char* cadenaBits = malloc(CH*8 + 1);
     int stop = 1;
-    
+
 
     printf("[%04X]      ", punt + i*CH);
     if((AL & 0x01) == 1){
@@ -1097,7 +1129,7 @@ void EscrFormato(mv* MV, int i,int punt, short int AL, char CH){
             cadenaBits[j] = '0';
         }
         cadenaBits[CH*8] = '\0';
-        
+
         for(j=0; j<CH; j++){
             escritura |= (*MV).memoria[punt + i*CH + j]&0x00FF << ((CH-1-j)*8);
         }
@@ -1121,12 +1153,12 @@ void EscrFormato(mv* MV, int i,int punt, short int AL, char CH){
 
     if(stop){
         printf("Error, formato no valido\n");
-        STOP(&MV, 0, 0, 0); //Error
+        STOP(MV, 0, 0, 0); //Error
     }
 }
 
 void SYSTRINGR(mv* MV, int punt, short int CX, short int AL){
-    char string[CX];
+    char *string;
 
     printf("Escribir cadena de %d largo: \n" ,CX);
     scanf("%s", string);
@@ -1138,13 +1170,13 @@ void SYSTRINGR(mv* MV, int punt, short int CX, short int AL){
     for (;i<CX;i++){
         MV->memoria[punt+i] = string[i];
     }
-    MV->memoria[punt+i+1] = '/0';
+    MV->memoria[punt+i+1] = '\0';
 
 //Entiendo esta bien
 }
-
+//Se hicieron cambios en estas funciones, revisar
 void SYSTRINGW(mv* MV, int punt, short int CX, short int AL){
-    char string[CX];
+    char *string;
     for (int i=0; i<CX; i++){
         printf("%c", (*MV).memoria[punt+i]);
     }
@@ -1152,7 +1184,7 @@ void SYSTRINGW(mv* MV, int punt, short int CX, short int AL){
 }
 
 void SYSF(mv* MV){
-    char *punteroArgv = ValoropST(3, MV->registros[SS], MV); //Devuelve el puntero a memoria
+    /*char *punteroArgv = (int) ValoropST(3, MV->registros[SS], MV); //Devuelve el puntero a memoria
     int punteroArgc = ValoropST(3, MV->registros[SS] + 4 , MV); //Devuelve el nro de elementos
     char* ext = ".vmi";
     int Vmi = buscaStringArgv(1, ext, punteroArgv, punteroArgc);
@@ -1188,6 +1220,7 @@ void SYSF(mv* MV){
         else
             printf("caracter invalido \n");
     }
+    */
 }
 
 int sumaTamaniosTabla(mv* MV){
@@ -1233,7 +1266,7 @@ void Disassembler(mv* MV, int offset){
     (*MV).registros[IP]=(*MV).TSeg[0].Base; //IP = CS
 
     char* nomFun[32] = {"SYS","JMP","JZ","JP","JN","JNZ","JNP","JNN","NOT","","","PUSH","POP","CALL","RET","STOP","MOV","ADD","SUB","SWAP","MUL","DIV","CMP","SHL","SHR","AND","OR","XOR","LDL","LDH","RND"};
-    
+
     int indiceCS = (*MV).registros[CS] >> 16; //Entrada Tabla Segmentos
     while((*MV).registros[IP] < (*MV).TSeg[indiceCS].Base + (*MV).TSeg[indiceCS].Tamanio){
         char instruccion = (*MV).memoria[(*MV).registros[IP]];
@@ -1285,7 +1318,7 @@ void Disassembler(mv* MV, int offset){
         }
         if(tipoA != 0){
             unsigned char a;
-            
+
             for(i=tipoA; i>0; i--){
                 a = (operandoA >> ((i-1)*8)) & 0x00FF;
                 printf("%02X ", a);
@@ -1320,7 +1353,7 @@ void Disassembler(mv* MV, int offset){
                 valor = operandoB;
                 printf(" %d ", valor);
             }
-            
+
         }
             else
             if(tipoB == 1)
@@ -1331,7 +1364,7 @@ void Disassembler(mv* MV, int offset){
                 else
                     printf("");
         printf("\n");
-        
+
     }
 }
 
@@ -1440,7 +1473,7 @@ void MEMORIA(mv MV, int *cont, int *op){
 }
 
 int ObtenerTamanioCelda(mv MV,int op){
-  
+
     switch(op & 0x3){
       case 0: return 4; //long
       case 1:
@@ -1458,7 +1491,7 @@ int ValoropST(int tipo, int op, mv* MV){  //Valor operando Segun Tipo
 
     switch(tipo){
         case 1: // Registro
-            return getReg(*MV, posReg, sector);  //(mv, direccion en mv.registro, sector) 
+            return getReg(*MV, posReg, sector);  //(mv, direccion en mv.registro, sector)
         case 2: // Inmediato
             return op;
         case 3: { // Memoria
@@ -1476,6 +1509,6 @@ void setMemoria(mv* MV, int posMem, int valorB){
     int tamcelda = ObtenerTamanioCelda(*MV, posMem);
     int direccion = posMem >> 2;
     for(int i=tamcelda-1; i>=0; i--){
-        (*MV).memoria[posMem + i] = (valorB >>((tamcelda-1- i)*8)) & 0xFF;
+        (*MV).memoria[direccion + i] = (valorB >>((tamcelda-1- i)*8)) & 0xFF;
     }
 }
