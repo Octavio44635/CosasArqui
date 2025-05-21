@@ -9,7 +9,7 @@
             "name": "Debug MVSegundaParte",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/MVSegundaParte.exe",
+            "program": "C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/SegundaParte/a.exe",
             "args": [
                 "C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/SegundaParte/Archivos/alloc25.vmx",
                 "-p",
@@ -17,7 +17,7 @@
                 "pal2"
             ],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
+            "cwd": "C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/SegundaParte",
             "environment": [],
             "externalConsole": true,
             "MIMode": "gdb"

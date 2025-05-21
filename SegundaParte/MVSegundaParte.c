@@ -115,19 +115,14 @@ int main(int argc, char *argv[]){
     mv MV;
     int tamanio, ubicacion=0, TamPS=0;
     int posVMX =buscaStringArgv(1, ".vmx", argv, argc);
-    printf("posVMX: %d \n", posVMX);
+
     int posVMI=buscaStringArgv(1, ".vmi", argv, argc);
-    printf("posVMI: %d\n", posVMI);
-    //Busca el parametro m=
+    
     tamanio = buscaParametroTamanio(argc, argv);
     if(tamanio<0)
         tamanio = Tamtot;
 
-    printf("Tamanio: %d\n", tamanio);
     TamPS = creaPS(&MV, argc, argv);
-
-    for(int i=0; i<TamPS;i++)
-        printf("%02X %c \n", MV.memoria[i], MV.memoria[i]);
 
     if(posVMX){
         printf("entro en vmx, %d \n", posVMX);
@@ -137,13 +132,13 @@ int main(int argc, char *argv[]){
     else if(posVMI && !posVMX) //Si esto da verdadero es por que no hay vmx
         lecturaVMI(&MV, tamanio, argv[posVMI]);
 
-    int offsetEntry = MV.registros[IP] & 0x0000FFFF;
+    int offsetEntry = MV.registros[IP] & 0x0000FFFF; //Es para despues
 
     cargaSS(&MV, argv, argc);
-    //LeeCS(&MV);
-    printf("\n");
 
-    if(buscaStringArgv(0, "-d",argv,argc) == 0)
+    LeeCS(&MV);
+
+    if(buscaStringArgv(0, "-d",argv,argc))
         Disassembler(&MV, offsetEntry);
     //
 
@@ -439,10 +434,15 @@ void cargaSS(mv* MV, char* argv[], int argc){
 
     printf("SS \n");
     int i=0;
-    while(MV->registros[SP]&0x0000FFFF < MV->TSeg[MV->registros[SS]>>16].Tamanio){
-        printf("SP: %04X \n", MV->registros[SP+i++]&0x0000FFFF);
-
+    int posMem = MV->TSeg[SS].Base + MV->registros[SP] & 0x0000FFFF;
+    for(i=0; i<3; i++){
+        printf("posMem: %04X \n", posMem);
+        for(int j=0; j<4; j++){
+            printf("%02X \n ", MV->memoria[posMem+j]);
+        }
+        posMem += 4;
     }
+    //Solucionado
 }
 
 void LeeCS (mv *MV){
@@ -893,17 +893,15 @@ void set(mv* MV, int opA, char tipoA, int valorB){
         int indice;
 
         (*MV).registros[SP]-=4;
-        indice=((*MV).registros[SS] >>16) &0x0000FFFF; //Entrada segmento SS
+        indice=((*MV).registros[SP] >>16) &0x0000FFFF; //Entrada segmento SS
 
         if ((MV->registros[SP]&0x0000FFFF) <= 0){
             printf("Error: Stack overflow\n");
             STOP(MV, 0, 0, 0);
         }
         int punteroSP=0;
-        punteroReg(*MV, MV->registros[SP], &punteroSP);
-        printf("PUSH: %08X \n", punteroSP);
-        setMemoria(MV,punteroSP, valor);  //Guarda valor en la posición SP de memoria[], que está dentro del SS,lo estás guardando en la pila.
-        //printf("PUSH: %08X \n", MV->memoria[MV->registros[SP]]);
+        punteroReg(*MV, SP, &punteroSP);
+        setMemoria(MV,punteroSP<<2, valor);
     }
 
     void POP (mv* MV, int opA, int opB, char operacion){
@@ -958,7 +956,7 @@ void set(mv* MV, int opA, char tipoA, int valorB){
 ////////
 void punteroReg(mv MV, int dirReg, int* op){
 
-    short int basereg = MV.registros[dirReg] >> 16;
+    short int basereg = (MV.registros[dirReg] >> 16) & 0x0000FFFF;
     short int offset= MV.registros[dirReg] & 0x0000FFFF;
 
     *op = 0;
@@ -1509,6 +1507,6 @@ void setMemoria(mv* MV, int posMem, int valorB){
     int tamcelda = ObtenerTamanioCelda(*MV, posMem);
     int direccion = posMem >> 2;
     for(int i=tamcelda-1; i>=0; i--){
-        (*MV).memoria[direccion + i] = (valorB >>((tamcelda-1- i)*8)) & 0xFF;
+        (*MV).memoria[direccion + i] = (valorB >>((tamcelda-1- i)*8)) & 0x00FF;
     }
 }
