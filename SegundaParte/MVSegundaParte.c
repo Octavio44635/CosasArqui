@@ -132,7 +132,8 @@ int main(int argc, char *argv[]){
     else if(posVMI && !posVMX) //Si esto da verdadero es por que no hay vmx
         lecturaVMI(&MV, tamanio, argv[posVMI]);
 
-    int offsetEntry = MV.registros[IP] & 0x0000FFFF; //Es para despues
+    int offsetEntry = MV.TSeg[(MV.registros[CS]>>16) & 0x0000FFFF].Base + MV.registros[IP] & 0x0000FFFF ; //Es para despues
+    printf("offsetEntry: %04X \n", offsetEntry);
 
     cargaSS(&MV, argv, argc);
 
@@ -172,26 +173,26 @@ void lectura(mv* MV, char* argv[], int tamanio, int TamPS){
 
 
         //Llamados segun la version
-        if((*MV).memoria[5] == '1'){
+        int arregloTamanios[6] = {TamPS,tamKS, tamCS, tamDS, tamES, tamSS}; //Arreglo de tamanios de segmentos
+        printf("version: %d \n", MV->memoria[5]);
+        if((*MV).memoria[5] == 0x01){
             fread((*MV).memoria,sizeof(char),tamCS,arch);
             fclose(arch);
         }
-        else{
+        else if(MV->memoria[5] == 0x02){
             fread((*MV).memoria+8,sizeof(char),10,arch); //Lectura de la cabecera de Archivo VMX
             tamDS = (((*MV).memoria[8]&0x00FF) << 8 )| ((*MV).memoria[9] & 0x00FF);
             tamES = (((*MV).memoria[10]&0x00FF) << 8 )| ((*MV).memoria[11] & 0x00FF);
             tamSS = (((*MV).memoria[12]&0x00FF) << 8 )| ((*MV).memoria[13] & 0x00FF);
             tamKS = (((*MV).memoria[14]&0x00FF) << 8 )| ((*MV).memoria[15] & 0x00FF);
             offsetEntry = ((*MV).memoria[16]&0x00FF) << 8 | ((*MV).memoria[17] & 0x00FF);
+
+            for(int i=8; i<18; i++){
+                printf("i: %d ; memoria: %02X \n",i, MV->memoria[i]);
+            }
+            printf("Tamanios: %d %d %d %d %d %d\n", arregloTamanios[0], arregloTamanios[1], arregloTamanios[2], arregloTamanios[3], arregloTamanios[4], arregloTamanios[5]);
+            fread(MV->memoria + TamPS + tamKS,sizeof(char), tamCS, arch); //Lectura de la memoria
         }
-
-        for(int i=8; i<18; i++){
-            printf("i: %d ; memoria: %02X \n",i, MV->memoria[i]);
-        }
-
-        int arregloTamanios[6] = {TamPS,tamKS, tamCS, tamDS, tamES, tamSS}; //Arreglo de tamanios de segmentos
-        printf("Tamanios: %d %d %d %d %d %d\n", arregloTamanios[0], arregloTamanios[1], arregloTamanios[2], arregloTamanios[3], arregloTamanios[4], arregloTamanios[5]);
-
         if(tamanio >= sumaTamanio(arregloTamanios))
             CargaRegistros(MV, arregloTamanios, offsetEntry, tamanio);
         else{
@@ -1265,9 +1266,10 @@ void Disassembler(mv* MV, int offset){
 
     char* nomFun[32] = {"SYS","JMP","JZ","JP","JN","JNZ","JNP","JNN","NOT","","","PUSH","POP","CALL","RET","STOP","MOV","ADD","SUB","SWAP","MUL","DIV","CMP","SHL","SHR","AND","OR","XOR","LDL","LDH","RND"};
 
-    int indiceCS = (*MV).registros[CS] >> 16; //Entrada Tabla Segmentos
+    printf("Registro IP = %04X\n", (*MV).registros[IP]);
+    int indiceCS = (MV->registros[CS] >> 16) & 0x0000FFFF; //Entrada Tabla Segmentos
     while((*MV).registros[IP] < (*MV).TSeg[indiceCS].Base + (*MV).TSeg[indiceCS].Tamanio){
-        char instruccion = (*MV).memoria[(*MV).registros[IP]];
+        char instruccion = (*MV).memoria[MV->TSeg[indiceCS].Base + (*MV).registros[IP]];
         //Ya se mostro la orden, ahora se procede a mostrar los operandos
         char tipoA = (instruccion >> 4) & 0x3, operacion = instruccion & 0x1F,tipoB = (instruccion >> 6) & 0x3;
         int operandoA, operandoB, i;
