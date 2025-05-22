@@ -47,7 +47,7 @@ int buscaParametroTamanio(int, char*[]);
 int buscaStringArgv(int, char*, char*[], int);
 void leeRegistrosVMI(mv*);
 void leeTablaVMI(mv*);
-void cargaSS(mv*, char*[], int);
+void cargaSS(mv*, int, int);
 void LeeCS(mv*);
 void leeOrdenCS(mv*);
 void SACAREGISTRO(mv, int*, int*);
@@ -117,7 +117,7 @@ int main(int argc, char *argv[]){
     int posVMX =buscaStringArgv(1, ".vmx", argv, argc);
 
     int posVMI=buscaStringArgv(1, ".vmi", argv, argc);
-    
+
     tamanio = buscaParametroTamanio(argc, argv);
     if(tamanio<0)
         tamanio = Tamtot;
@@ -135,7 +135,10 @@ int main(int argc, char *argv[]){
     int offsetEntry = MV.TSeg[(MV.registros[CS]>>16) & 0x0000FFFF].Base + MV.registros[IP] & 0x0000FFFF ; //Es para despues
     printf("offsetEntry: %04X \n", offsetEntry);
 
-    cargaSS(&MV, argv, argc);
+    if(TamPS != 0)
+        cargaSS(&MV, 0, argc);
+    //else
+        //cargaSS(&MV,MV->memoria[]) Terminar
 
     LeeCS(&MV);
 
@@ -181,11 +184,15 @@ void lectura(mv* MV, char* argv[], int tamanio, int TamPS){
         }
         else if(MV->memoria[5] == 0x02){
             fread((*MV).memoria+8,sizeof(char),10,arch); //Lectura de la cabecera de Archivo VMX
-            tamDS = (((*MV).memoria[8]&0x00FF) << 8 )| ((*MV).memoria[9] & 0x00FF);
-            tamES = (((*MV).memoria[10]&0x00FF) << 8 )| ((*MV).memoria[11] & 0x00FF);
-            tamSS = (((*MV).memoria[12]&0x00FF) << 8 )| ((*MV).memoria[13] & 0x00FF);
-            tamKS = (((*MV).memoria[14]&0x00FF) << 8 )| ((*MV).memoria[15] & 0x00FF);
+            arregloTamanios[3] = (((*MV).memoria[8]&0x00FF) << 8 )| ((*MV).memoria[9] & 0x00FF); //DS
+            arregloTamanios[4] = (((*MV).memoria[10]&0x00FF) << 8 )| ((*MV).memoria[11] & 0x00FF); //ES
+            arregloTamanios[5] = (((*MV).memoria[12]&0x00FF) << 8 )| ((*MV).memoria[13] & 0x00FF); //SS
+            arregloTamanios[1] = (((*MV).memoria[14]&0x00FF) << 8 )| ((*MV).memoria[15] & 0x00FF); //KS
             offsetEntry = ((*MV).memoria[16]&0x00FF) << 8 | ((*MV).memoria[17] & 0x00FF);
+
+            arregloTamanios[0] = TamPS;
+            arregloTamanios[2] = tamCS;
+
 
             for(int i=8; i<18; i++){
                 printf("i: %d ; memoria: %02X \n",i, MV->memoria[i]);
@@ -333,7 +340,7 @@ int creaPS(mv* MV, int argc, char *argv[]){
             (*MV).memoria[acum+j] = argv[i][j];
         }
         acum += j;
-        (*MV).memoria[acum] = '\0'; //Agrega el /0 al final
+        (*MV).memoria[acum] = '\0'; //Agrega el \0 al final
         acum++;
         i++;
     }
@@ -425,11 +432,10 @@ void leeTablaVMI(mv* MV){
     }
 }
 
-void cargaSS(mv* MV, char* argv[], int argc){
+void cargaSS(mv* MV, int punt, int argc){
 
-    
 
-    PUSH(MV, 0, argv, 0b10000000);
+    PUSH(MV, 0, punt, 0b10000000); //o es -1 o es un puntero al primer puntero del PS
     PUSH(MV, 0, argc, 0b10000000);
     PUSH(MV, 0, -1, 0b10000000);
 
@@ -453,9 +459,8 @@ void LeeCS (mv *MV){
 
     char instruccion;
     int opA,opB,operacion,IPaux, cont=0;
-
-    int indiceCS = MV->registros[CS]>>16;
-    IPaux=(*MV).registros[IP];
+    printf("Ingresa a LeeCS");
+    int indiceCS = (MV->registros[CS]>>16) & 0x0000FFFF;
     while ((*MV).registros[IP]< MV->TSeg[indiceCS].Tamanio){  //IP <= (*MV).TSeg[0].Tamanio
         //Eliminar todo esto si la implementacion es correcta
         leeOrdenCS(MV);
@@ -517,6 +522,7 @@ void leeOrdenCS(mv* MV){
 
     char instruccion;
     int opA,opB,operacion, cont=0;
+    printf("IP: %d", MV->registros[IP]);
 
 
     instruccion = (*MV).memoria[MV->registros[IP]]; //levanto el dato del CS apuntado por IP
