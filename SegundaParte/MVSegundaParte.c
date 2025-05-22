@@ -38,27 +38,29 @@ typedef struct{
     int registros[TamanioRegistros];
     TablaS TSeg[TamanioTablaS];} mv;
 
-void lectura(mv*, char*[], int, int);
-void lecturaVMI(mv*, int, char*);
-void CargaRegistros(mv*, int[], int, int);
-int sumaTamanio(int[]);
-int creaPS(mv*, int, char*[]);
-int buscaParametroTamanio(int, char*[]);
-int buscaStringArgv(int, char*, char*[], int);
-void leeRegistrosVMI(mv*);
-void leeTablaVMI(mv*);
-void cargaSS(mv*, int, int);
-void LeeCS(mv*);
+void lectura(mv*, char*, int, int); //LEE VMX
+void lecturaVMI(mv*, int, char*); //LEE VMI
+void CargaRegistros(mv*, int[], int, int); //INICIALIZA LOS REG Y LA TABLA
+int sumaTamanio(int[]); //SUMA EL TAMAÑO DE LOS SEGMENTOS DE LA TABLA
+int creaPS(mv*, int*, char*[],char**); //CREA EL PARAM SEGMENT
+int buscaParametroTamanio(int, char*[]); //BUSCA Y TRANSFORMA EL m=M
+int buscaStringArgv(int, char*, char*[], int); //BUSCA UN STRING EN ARGV, YA SEA ARCHIVO O NO
+void leeRegistrosVMI(mv*); //LEE REGISTROS DE VMI
+void leeTablaVMI(mv*); //LEE TABLA DE VMI
+void cargaSS(mv*, int, int); //HACE TRES PUSH EN SS
+void LeeCS(mv*); //FUNCION DE INICIO DE LECTURA DEL CODE SEGMENT
 void leeOrdenCS(mv*);
-void SACAREGISTRO(mv, int*, int*);
-void INMEDIATO(mv, int*, int*);
-void MEMORIA(mv, int*, int*);
+void SACAREGISTRO(mv, int*, int*); //DEVUELVE EL VALOR DE MEMORIA AL QUE APUNTA EL REG
+void INMEDIATO(mv, int*, int*); //DEVUELVE EL INMEDIATO
+void MEMORIA(mv, int*, int*); //DEVUELVE LA POSICION DE MEMORIA, NO EL VALOR
 void NULO(mv, int*, int*);
 
-void BytesMEMORIA(mv, int*, int*);
+void BytesMEMORIA(mv, int*, int*); //DEVUELVE LOS BYTES LEIDOS
 void CAMBIACC(mv*, int);
-void punteroReg(mv, int, int*);
+int punteroReg(mv, int); //DEVUELVE LA POSICION A LA QUE APUNTA EL REG
+//posiblemente tenga que usarla en todos los lugares donde IP se usa
 
+//FUNCIONES DEL SYS
 void SYS(mv*, int, int, char);
 void SYSR(mv*, int, char, char, short int);
 void SYSW(mv*, int, char, char, short int);
@@ -68,6 +70,7 @@ void SYSF(mv*);
 void EscrFormato(mv*, int, int, short int, char);
 void leeFormato(mv, int*, int, char);
 
+//FUNCIONES DE OPERACIONES
 void MOV(mv*, int, int, char);
 void ADD(mv*, int, int, char);
 void SUB(mv*, int, int, char);
@@ -97,13 +100,16 @@ void CALL(mv*, int, int, char);
 void RET(mv*, int, int, char);
 void CMP(mv*, int, int, char);
 
-int getReg(mv, char, char);
-void setReg(mv*, char, char, int);
-int ValoropST(int, int, mv*);
+
+int getReg(mv, char, char); //OBTIENE EL VALOR DEL REGISTRO CON SU RESPECTIVO SECTOR
+void setReg(mv*, char, char, int); //CAMBIA EL VALOR DE UN REGISTRO CON SU RESPECTIVO SECTOR
+int ValoropST(int, int, mv*); //DEVUELVE EL VALOR DEL OPERANDO, REQUIERE EL TIPO, EN CASO DE SER DE MEMORIA SE FIJA EL SECTOR
 void set(mv*, int, char, int);
 int ObtenerTamanioCelda(mv, int);
-void setMemoria(mv*, int, int);
-void EMPTY(mv*, int, int, char);
+void setMemoria(mv*, int, int); //METE UN VALOR EN MEMORIA
+
+void EMPTY(mv*, int, int, char);//STOP
+//FUNCIONES DEL DISASSEMBLER
 void Disassembler(mv*, int);
 char* EscrReg(mv, int);
 char* EscrMem(mv, int);
@@ -117,29 +123,26 @@ int main(int argc, char *argv[]){
     int posVMX =buscaStringArgv(1, ".vmx", argv, argc);
 
     int posVMI=buscaStringArgv(1, ".vmi", argv, argc);
-    MV.registros[AC] = argv[posVMI];
-    printf("AC: %s \n", MV.registros[AC]);
+    char * ptr=NULL;
+    MV.registros[AC] = argv[posVMI];//polemico
 
     tamanio = buscaParametroTamanio(argc, argv);
     if(tamanio<0)
         tamanio = Tamtot;
 
-    TamPS = creaPS(&MV, argc, argv);
+    TamPS = creaPS(&MV, &argc, argv, &ptr);
 
     if(posVMX){
-        lectura (&MV, argv, tamanio, TamPS);
+        lectura (&MV, argv[posVMX], tamanio, TamPS);
 
     }
     else if(posVMI && !posVMX) //Si esto da verdadero es por que no hay vmx
         lecturaVMI(&MV, tamanio, argv[posVMI]);
 
-    int offsetEntry = MV.TSeg[(MV.registros[CS]>>16) & 0x0000FFFF].Base + MV.registros[IP] & 0x0000FFFF ; //Es para despues
+    int offsetEntry = punteroReg(MV, IP); //Es para despues
     printf("offsetEntry: %04X \n", offsetEntry);
 
-    if(TamPS == 0)
-        cargaSS(&MV, 0, argc);
-    //else
-        //cargaSS(&MV,MV->memoria[]);
+    cargaSS(&MV,ptr, argc);
 
     LeeCS(&MV);
 
@@ -152,9 +155,9 @@ int main(int argc, char *argv[]){
 }
 
 
-void lectura(mv* MV, char* argv[], int tamanio, int TamPS){
+void lectura(mv* MV, char* archivo, int tamanio, int TamPS){
 
-    FILE *arch = fopen(argv[1], "rb");
+    FILE *arch = fopen(archivo, "rb");
     //FILE *arch = fopen("C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/PrimerParte/ArchivosMV/ArchivosSample/sample6.vmx", "rb");
     if( arch != NULL){
         fread((*MV).memoria, sizeof(char), 8, arch); //Se leen bytes de forma arbitraria, los primeros 7 son el header, siendo los ultimos 2 el tamaño
@@ -287,10 +290,8 @@ void CargaRegistros(mv* MV, int ArregloTamanios[], int offsetEntry, int tamanio)
 
     }
     i=(ArregloTamanios[0] > 0);
-    if(ArregloTamanios[1]>0){
+    if(ArregloTamanios[1]>0)
         (*MV).registros[KS] = ((i++ <<16)& 0xFFFF0000);
-
-    }
     if(ArregloTamanios[CS+2] != 0)
         (*MV).registros[CS] = ((i++<<16) & 0xFFFF0000);
     if(ArregloTamanios[DS+2] != 0)
@@ -327,16 +328,16 @@ int sumaTamanio(int arreglo[]){
     return suma;
 }
 
-int creaPS(mv* MV, int argc, char *argv[]){
+int creaPS(mv* MV, int* argc, char *argv[], char** ptr){
     int acum=0;
     int i=0;
     int j=0;
-    while(i<argc && strcmp(argv[i],"-p") != 0){
+    while(i<*argc && strcmp(argv[i],"-p") != 0){
         i++;
     }
-    int nroPal = argc - i - 1;
-    i = argc - nroPal;
-    while(i<argc){
+    int nroPal = *argc - i - 1; //nro de palabras despues de -p
+    i = *argc - nroPal; //posicion de la primer palabra
+    while(i<*argc){
         for (j=0; j<strlen(argv[i]); j++){
             (*MV).memoria[acum+j] = argv[i][j];
         }
@@ -348,7 +349,9 @@ int creaPS(mv* MV, int argc, char *argv[]){
     //Hasta aca estan las palabras
     //asignacion de punteros
     int puntero = 0;
-        for (i=argc - nroPal; i<argc; i++){
+    if(nroPal>0){
+        *ptr = acum;
+        for (i=*argc - nroPal; i<*argc; i++){
             for (j=0; j<4;j++){
                 (*MV).memoria[acum+j] = (puntero >> ((3-j)*8)) & 0x00FF; //Guarda el puntero en la memoria
             }
@@ -356,6 +359,13 @@ int creaPS(mv* MV, int argc, char *argv[]){
             puntero += strlen(argv[i])+1;
 
         }
+        *argc = *argc - nroPal;
+        *argc /= 4;
+    }
+    else{
+        *ptr = -1;
+        *argc = 0;
+    }
     return acum;
 
 }
@@ -461,58 +471,8 @@ void LeeCS (mv *MV){
     char instruccion;
     int opA,opB,operacion,IPaux, cont=0;
     int indiceCS = (MV->registros[CS]>>16) & 0x0000FFFF;
-    while ((*MV).registros[IP] < MV->TSeg[indiceCS].Tamanio){  //IP <= (*MV).TSeg[0].Tamanio
-        //Eliminar todo esto si la implementacion es correcta
+    while ((MV->registros[IP]&0x0000FFFF) < MV->TSeg[indiceCS].Tamanio){//Eso esta bien por que se compara el offset absoluto con el tamaño que tambien es absoluto
         leeOrdenCS(MV);
-        /*instruccion = (*MV).memoria[IPaux]; //levanto el dato del CS apuntado por IP
-        opB=(instruccion&0xC0)>>6;    //4 valores, 2 bits
-        opA=(instruccion&0x30)>>4;
-        operacion=(instruccion &0x1F);
-        //En instruccion la receta de la orden
-        //xx x_x_xxxx
-        int BytesA=0, BytesB=0;
-
-        //Deberias sacar los bits
-        FuncOperandos[opB](*MV, &cont, &BytesB); //(MV, cont, bytesOp);
-        //Deberias cortar el dato
-
-        //En A lo mismo
-        FuncOperandos[opA](*MV, &cont, &BytesA);
-
-
-        cont++;
-        IPaux= IPaux + cont;
-        cont = 0;
-
-        (*MV).registros[IP]=IPaux; //Graba en el IP la proxima instruccion a leer
-
-        if(operacion >= 0x0 & operacion <= 0x8)//Solo un operando
-            if(opB != 0)//Se usa B, no A. Ignoramos A
-                Funciones[operacion](MV, 0, BytesB, instruccion); //Llama a la funcion correspondiente
-            else{
-                printf("Error, operando B nulo\n");
-                STOP(MV, opA, opB, instruccion); //Error
-            }
-        else
-            if(operacion >= 0x10 & operacion <= 0x1E)
-                if(opA != 0 && opA != 2){
-                    if(opB != 0)
-                        Funciones[operacion](MV, BytesA, BytesB, instruccion); //Llama a la funcion correspondiente
-                    else{
-                        printf("Error, operando B nulo\n");
-                        STOP(MV, opA, opB, instruccion); //Error
-                    }
-                }
-                else{
-                    printf("Error, operando A invalido\n");
-                    STOP(MV, opA, opB, instruccion); //Error
-                }
-            else{
-                printf("\n Fin de ejecucion");
-                STOP(MV, opA, opB, instruccion); //Error
-            }
-        IPaux = (*MV).registros[IP]; //Graba en el IP la proxima instruccion a leer, importa al hacer jump
-    */
     }
 }
 
@@ -524,8 +484,8 @@ void leeOrdenCS(mv* MV){
     int opA,opB,operacion, cont=0;
 
 
-    
-    instruccion = (*MV).memoria[MV->registros[IP]]; //levanto el dato del CS apuntado por IP
+    int puntIP = punteroReg(*MV, IP);
+    instruccion = (*MV).memoria[puntIP]; //levanto el dato del CS apuntado por IP
     opB=(instruccion&0xC0)>>6;    //4 valores, 2 bits
     opA=(instruccion&0x30)>>4;
     operacion=(instruccion &0x1F);
@@ -575,49 +535,52 @@ void leeOrdenCS(mv* MV){
 void SACAREGISTRO (mv MV,int *cont, int *bytesOp){
     *bytesOp=0;
     *cont += 1;
-    *bytesOp = MV.memoria[MV.registros[IP] + *cont];
+    *bytesOp = MV.memoria[punteroReg(MV,IP) + *cont];
 
 }
 
 void INMEDIATO (mv MV,int *cont, int *op){
   short int inmediato = 0;
-  inmediato = MV.memoria[MV.registros[IP]+*cont + 2] &0x00FF;
-  inmediato = (MV.memoria[MV.registros[IP]+*cont + 1] << 8) | inmediato;
+  inmediato = MV.memoria[punteroReg(MV,IP)+*cont + 2] &0x00FF;
+  inmediato = (MV.memoria[punteroReg(MV,IP)+*cont + 1] << 8) | inmediato;
   *op = 0;
   *op = inmediato;
   *cont += 2; //Aumento el contador
 }
-/*
-void MEMORIA (mv MV, int *cont, int *op){
+
+void MEMORIA(mv MV, int *cont, int *op){
     short int offset, basereg, inmediato;
     char codreg;
-    int PosMem;
+    int tamcelda, PosMem, TercerByte;
 
     //primero se lee un inmediato, dos bytes
 
     //Funcion INMEDIATO
-    inmediato = MV.memoria[MV.registros[IP]+*cont + 2];
-    inmediato = (MV.memoria[MV.registros[IP]+*cont + 1] << 8) | inmediato;
+    inmediato = MV.memoria[punteroReg(MV,IP)+ *cont + 2] & 0x00FF;
+    inmediato = (MV.memoria[punteroReg(MV,IP) + *cont + 1] << 8) | inmediato;
     *cont += 2;
     //
     *cont += 1; //Aumento el contador
-    codreg= (MV.memoria[MV.registros[IP]+ *cont]>>4)&0x0F; //Codigo del registro en el vector
-    char tamañoCelda = (MV.memoria[MV.registros[IP]+ *cont])&0x03;
+    TercerByte = MV.memoria[punteroReg(MV,IP) + *cont];
+
+    codreg = (TercerByte >> 4) & 0x0F;  //Codigo del registro en el vector
+    tamcelda = TercerByte & 0x03;
 
     basereg = MV.registros[codreg] >> 16;
-    offset= MV.registros[codreg] & 0x0000FFFF;
+    offset = MV.registros[codreg] & 0x0000FFFF;
 
-    //PosMem = MV.TSeg[basereg].Base + offset + inmediato;
 
+    PosMem = MV.TSeg[basereg].Base + offset + inmediato;
     //*op = MV.memoria[PosMem];
-    *op = 0;
-    *op = MV.TSeg[basereg].Base + offset + inmediato;
-    if(*op > Tamtot){
-        printf("Error, direccion de memoria fuera de rango\n");
-        STOP(&MV, *op, 0, 0); //Error
+
+    if (PosMem >= Tamtot) {
+        printf("Error: dirección de memoria fuera de rango\n");
+        STOP(&MV, PosMem, 0, 0);
     }
+
+    // Shift para obtener espacio para agregar el tamanio de la celda ademas de tener la direccion de memoria.
+    *op = (PosMem << 2) | tamcelda;
 }
-    */
 
 void NULO (mv MV, int *cont, int *op){
 }
@@ -626,14 +589,6 @@ void EMPTY(mv* MV, int opA, int opB, char operacion){
     printf("Funcion invalida \n");
     STOP(MV, 0, 0, 0); //Error
 }
-
-/*
-void setMemoria(mv* MV, int posMem, int valorB){
-    for(int i=3; i>=0; i--){
-        (*MV).memoria[posMem+i] = (valorB >> ((3-i)*8)) & 0x00FF;
-    }
-}
-    */
 
 void setReg(mv *MV, char posA, char sectorA, int valorB){
     switch(sectorA){
@@ -654,27 +609,27 @@ void setReg(mv *MV, char posA, char sectorA, int valorB){
             break;
     }
 }
-/*
-int ValoropST(int tipo, int op, mv* MV){ //Valor operando Segun Tipo
-    char posReg = op>>4 & 0x0f;
-    char sector = (op>>2) & 0x3;
-    int valor=0,i;
+
+int ValoropST(int tipo, int op, mv* MV){  //Valor operando Segun Tipo
+    char posReg = (op >> 4) & 0x0F;
+    char sector = (op >> 2) & 0x03;
+    int valor = 0, tamcelda, direccion;
+
     switch(tipo){
-        case 1:
-            return getReg(*MV, posReg, sector); //(mv, direccion en mv.registro, sector)
-            break;
-        case 2:
+        case 1: // Registro
+            return getReg(*MV, posReg, sector);  //(mv, direccion en mv.registro, sector)
+        case 2: // Inmediato
             return op;
-            break;
-        case 3:
-            for (i=0; i<4; i++){
-                valor = (valor << 8) | (*MV).memoria[op+i] & 0x00FF;
+        case 3: { // Memoria
+            int tamcelda = ObtenerTamanioCelda(*MV, op);
+            int direccion = op >> 2;
+            for (int i = 0; i < tamcelda; i++) {
+                valor = (valor << 8) | ((*MV).memoria[direccion + i] & 0xFF);
             }
             return valor;
-            break;
+        }
     }
 }
-    */
 
 int getReg(mv MV, char posReg, char sector){
     int valor=0;
@@ -709,6 +664,27 @@ void set(mv* MV, int opA, char tipoA, int valorB){
     else
         setMemoria(MV, opA, valorB); //(MV, direccion en memoria, valorB)
 }
+
+int ObtenerTamanioCelda(mv MV,int op){
+
+    switch(op & 0x3){
+      case 0: return 4; //long
+      case 1:
+            printf ("Error: tamanio de operando no valido");
+            STOP (&MV,0,0,0);
+      case 2: return 2; //word
+      case 3: return 1; //byte
+    }
+}
+
+void setMemoria(mv* MV, int posMem, int valorB){
+    int tamcelda = ObtenerTamanioCelda(*MV, posMem);
+    int direccion = posMem >> 2;
+    for(int i=tamcelda-1; i>=0; i--){
+        (*MV).memoria[direccion + i] = (valorB >>((tamcelda-1- i)*8)) & 0x00FF;
+    }
+}
+
 //Funciones de la maquina virtual
     void MOV (mv* MV, int opA, int opB, char operacion){
         char tipoA=(operacion >> 4) & 0x3;
@@ -846,7 +822,7 @@ void set(mv* MV, int opA, char tipoA, int valorB){
 
     void STOP(mv* MV, int opA, int opB, char operacion){
         //STOP
-        (*MV).registros[IP] = (*MV).TSeg[0].Base + (*MV).TSeg[0].Tamanio; //IP
+        (*MV).registros[IP] = -1; //IP
     }
 
     void SWAP (mv* MV, int opA, int opB, char operacion){
@@ -906,8 +882,7 @@ void set(mv* MV, int opA, char tipoA, int valorB){
             printf("Error: Stack overflow\n");
             STOP(MV, 0, 0, 0);
         }
-        int punteroSP=0;
-        punteroReg(*MV, SP, &punteroSP);
+        int punteroSP= punteroReg(*MV, SP);
         setMemoria(MV,punteroSP<<2, valor);
     }
 
@@ -935,7 +910,8 @@ void set(mv* MV, int opA, char tipoA, int valorB){
 
         //IP apunta ya a la direccion a la siguiente direccion.
 
-         PUSH (MV,0,(*MV).registros[IP], 0x80); //preguntar eso del 0x8 q no lo entiendo.
+         PUSH (MV,0,punteroReg(*MV,IP), 0x80); //revisar que el uso de punteroReg(MV,IP) sea correcto
+        
 
          //Salto
         JMP(MV, 0, Dirdestino, 0);
@@ -961,13 +937,11 @@ void set(mv* MV, int opA, char tipoA, int valorB){
 
 
 ////////
-void punteroReg(mv MV, int dirReg, int* op){
+int punteroReg(mv MV, int dirReg){
 
     short int basereg = (MV.registros[dirReg] >> 16) & 0x0000FFFF;
     short int offset= MV.registros[dirReg] & 0x0000FFFF;
-
-    *op = 0;
-    *op = MV.TSeg[basereg].Base + offset;
+    return MV.TSeg[basereg].Base + offset;
 
 }
 
@@ -975,7 +949,7 @@ void SYS (mv* MV, int opA, int opB, char operacion){
     //SYS
     int valorB = ValoropST((operacion >> 6) & 0x03,opB , MV); //Se almacena el valor de B
     int dirReg = EDX; //Esta variable esta hecha por que no puedo mandar una constante como parametro
-    int puntEdx;    //Se almacena el puntero a EDX, puesto que es la porcion de memoria en la que se escribira
+    int puntEdx = punteroReg(*MV,EDX);    //Se almacena el puntero a EDX, puesto que es la porcion de memoria en la que se escribira
 
     int CX = getReg(*MV, 12, 3);
     char CH = (CX & 0X0000FF00) >> 8, CL = CX & 0xFF; //Esto se hace para no buscarlos repetidas veces en los ciclos
@@ -983,7 +957,7 @@ void SYS (mv* MV, int opA, int opB, char operacion){
 
     short int AL = getReg(*MV, 10, 3);  //Aca se almacena el formato
 
-    punteroReg(*MV, dirReg, &puntEdx);    //Se extrae la direccion de memoria a la que apunta edx
+    //punteroReg(*MV, EDX, &puntEdx);    //Se extrae la direccion de memoria a la que apunta edx
     //Puede ocurrir que la direccion de EDX sea negativa, entiendo hay que quitarle el signo
 
     //Hasta aca todo claro
@@ -1195,7 +1169,7 @@ void SYSF(mv* MV){
     char* ext = ".vmi";
     //int Vmi = ;
     printf("Archivo: %s\n", MV->registros[AC]);
-    FILE *archivo = fopen(MV->registros[AC], "wb");
+    FILE *archivo = fopen((char*) MV->registros[AC], "wb");
     char orden='\n';
     if(orden == '\n'){
         if(archivo){
@@ -1261,9 +1235,9 @@ void CAMBIACC (mv* MV, int valor){
 
 void BytesMEMORIA(mv MV, int *cont, int *operando){
     int todo=0;
-    todo = MV.memoria[MV.registros[IP]+*cont + 3] & 0xFF;
-    todo = (MV.memoria[MV.registros[IP]+*cont + 2] << 8) | todo;
-    todo = (MV.memoria[MV.registros[IP]+*cont + 1] << 16) | todo;
+    todo = MV.memoria[punteroReg(MV,IP)+*cont + 3] & 0xFF;
+    todo = (MV.memoria[punteroReg(MV,IP)+*cont + 2] << 8) | todo;
+    todo = (MV.memoria[punteroReg(MV,IP)+*cont + 1] << 16) | todo;
 
 
     *cont += 3;
@@ -1278,15 +1252,15 @@ void Disassembler(mv* MV, int offset){
     char* nomFun[32] = {"SYS","JMP","JZ","JP","JN","JNZ","JNP","JNN","NOT","","","PUSH","POP","CALL","RET","STOP","MOV","ADD","SUB","SWAP","MUL","DIV","CMP","SHL","SHR","AND","OR","XOR","LDL","LDH","RND"};
 
     int indiceCS = (MV->registros[CS] >> 16) & 0x0000FFFF; //Entrada Tabla Segmentos
-    while((*MV).registros[IP] < (*MV).TSeg[indiceCS].Base + (*MV).TSeg[indiceCS].Tamanio){
-        char instruccion = (*MV).memoria[MV->TSeg[indiceCS].Base + (*MV).registros[IP]];
+    while((*MV).registros[IP] < (*MV).TSeg[indiceCS].Base + (*MV).TSeg[indiceCS].Tamanio){ //Este es un ejemplo de lo que podria haberse hecho en lectura en lugar de tomar el valor del IP absoluto
+        char instruccion = (*MV).memoria[punteroReg(*MV,IP)]; //revisar el cambio en la direccion
         //Ya se mostro la orden, ahora se procede a mostrar los operandos
         char tipoA = (instruccion >> 4) & 0x3, operacion = instruccion & 0x1F,tipoB = (instruccion >> 6) & 0x3;
         int operandoA, operandoB, i;
         instruccion = instruccion & 0x00FF;
         //El tamaño y el tipo son iguales
 
-        if(MV->registros[IP] == offset)
+        if(MV->registros[IP] & 0x0000FFFF == offset) //Se extrae el offset directamente del IP
             printf(">");
         FuncOperandos[tipoB](*MV, &cont, &operandoB);
         FuncOperandos[tipoA](*MV, &cont, &operandoA);
@@ -1444,81 +1418,5 @@ char sectorMemoria(char sector){
         case 3:
             return '#'; //Por motivos de seguridad esto va a estar aca hasta el dia de la entrega
             break;
-    }
-}
-//Codigos de Luciano, por lo visto estan bien pero hay que hacer pruebas
-
-void MEMORIA(mv MV, int *cont, int *op){
-    short int offset, basereg, inmediato;
-    char codreg;
-    int tamcelda, PosMem, TercerByte;
-
-    //primero se lee un inmediato, dos bytes
-
-    //Funcion INMEDIATO
-    inmediato = MV.memoria[MV.registros[IP] + *cont + 2] & 0x00FF;
-    inmediato = (MV.memoria[MV.registros[IP] + *cont + 1] << 8) | inmediato;
-    *cont += 2;
-    //
-    *cont += 1; //Aumento el contador
-    TercerByte = MV.memoria[MV.registros[IP] + *cont];
-
-    codreg = (TercerByte >> 4) & 0x0F;  //Codigo del registro en el vector
-    tamcelda = TercerByte & 0x03;
-
-    basereg = MV.registros[codreg] >> 16;
-    offset = MV.registros[codreg] & 0x0000FFFF;
-
-
-    PosMem = MV.TSeg[basereg].Base + offset + inmediato;
-    //*op = MV.memoria[PosMem];
-
-    if (PosMem >= Tamtot) {
-        printf("Error: dirección de memoria fuera de rango\n");
-        STOP(&MV, PosMem, 0, 0);
-    }
-
-    // Shift para obtener espacio para agregar el tamanio de la celda ademas de tener la direccion de memoria.
-    *op = (PosMem << 2) | tamcelda;
-}
-
-int ObtenerTamanioCelda(mv MV,int op){
-
-    switch(op & 0x3){
-      case 0: return 4; //long
-      case 1:
-            printf ("Error: tamanio de operando no valido");
-            STOP (&MV,0,0,0);
-      case 2: return 2; //word
-      case 3: return 1; //byte
-    }
-}
-
-int ValoropST(int tipo, int op, mv* MV){  //Valor operando Segun Tipo
-    char posReg = (op >> 4) & 0x0F;
-    char sector = (op >> 2) & 0x03;
-    int valor = 0, tamcelda, direccion;
-
-    switch(tipo){
-        case 1: // Registro
-            return getReg(*MV, posReg, sector);  //(mv, direccion en mv.registro, sector)
-        case 2: // Inmediato
-            return op;
-        case 3: { // Memoria
-            int tamcelda = ObtenerTamanioCelda(*MV, op);
-            int direccion = op >> 2;
-            for (int i = 0; i < tamcelda; i++) {
-                valor = (valor << 8) | ((*MV).memoria[direccion + i] & 0xFF);
-            }
-            return valor;
-        }
-    }
-}
-
-void setMemoria(mv* MV, int posMem, int valorB){
-    int tamcelda = ObtenerTamanioCelda(*MV, posMem);
-    int direccion = posMem >> 2;
-    for(int i=tamcelda-1; i>=0; i--){
-        (*MV).memoria[direccion + i] = (valorB >>((tamcelda-1- i)*8)) & 0x00FF;
     }
 }

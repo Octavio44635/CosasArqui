@@ -12,7 +12,10 @@
             "program": "C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/SegundaParte/a.exe",
             "args": [
                 "C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/SegundaParte/Archivos/arboles_main25.vmx",
-                "-d"
+                "-d",
+                "C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/SegundaParte/Archivos/prueba.vmi",
+                "-p",
+                "pal1"
             ],
             "stopAtEntry": false,
             "cwd": "C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/SegundaParte",
