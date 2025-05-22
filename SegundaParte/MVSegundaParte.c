@@ -131,10 +131,8 @@ int main(int argc, char *argv[]){
     argcPS = argc;
     TamPS = creaPS(&MV,&argcPS, argv, &ptr);
 
-    if(posVMX){
+    if(posVMX)
         lectura (&MV, argv[posVMX], tamanio, TamPS);
-
-    }
     else if(posVMI && !posVMX) //Si esto da verdadero es por que no hay vmx
         lecturaVMI(&MV, tamanio, argv[posVMI]);
 
@@ -1175,14 +1173,18 @@ void SYSF(mv* MV){
     if(orden == '\n'){
         if(archivo){
             printf("Archivo abierto\n");
-            fwrite(MV->memoria, sizeof(char), 8, archivo);
+            char* header = "VMI251";
+            char* tamanio = sizeof(char)*sumaTamaniosTabla(MV);
+            fwrite(&header, sizeof(char), strlen(header), archivo);
+            fwrite(&tamanio, sizeof(char), 1, archivo);
+
             for (int i=0; i<16; i++)
                 fwrite(&MV->registros[i], sizeof(char), 4, archivo);
             for (int i=0; i<8; i++){
                 fwrite(&MV->TSeg[i].Base, sizeof(char), 4, archivo);
                 fwrite(&MV->TSeg[i].Tamanio, sizeof(char), 4, archivo);
             }
-            fwrite(&MV->memoria, sizeof(char), sumaTamaniosTabla(MV), archivo);
+            fwrite(&MV->memoria, sizeof(char), tamanio, archivo);
             fclose(archivo);
         }
         else{
