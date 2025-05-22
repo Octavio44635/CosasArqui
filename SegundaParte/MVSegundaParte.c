@@ -119,18 +119,17 @@ int sumaTamaniosTabla(mv*);
 int main(int argc, char *argv[]){
     //Las funciones del vector deben recibir los mismos parametros
     mv MV;
-    int tamanio, ubicacion=0, TamPS=0;
+    int tamanio, ubicacion=0, TamPS=0, argcPS=0;
     int posVMX =buscaStringArgv(1, ".vmx", argv, argc);
 
     int posVMI=buscaStringArgv(1, ".vmi", argv, argc);
     char * ptr=NULL;
-    MV.registros[AC] = argv[posVMI];//polemico
 
     tamanio = buscaParametroTamanio(argc, argv);
     if(tamanio<0)
         tamanio = Tamtot;
-
-    TamPS = creaPS(&MV, &argc, argv, &ptr);
+    argcPS = argc;
+    TamPS = creaPS(&MV,&argcPS, argv, &ptr);
 
     if(posVMX){
         lectura (&MV, argv[posVMX], tamanio, TamPS);
@@ -143,6 +142,8 @@ int main(int argc, char *argv[]){
     printf("offsetEntry: %04X \n", offsetEntry);
 
     cargaSS(&MV,ptr, argc);
+    
+    MV.registros[AC] = argv[posVMI];//polemico
 
     LeeCS(&MV);
 
@@ -328,7 +329,7 @@ int sumaTamanio(int arreglo[]){
     return suma;
 }
 
-int creaPS(mv* MV, int* argc, char *argv[], char** ptr){
+int creaPS(mv* MV, int* argc, char *argv[], char** ptr){ //Se llama argc por que primero lo mandaba a el, despues no quise cambiar el nombre de todo
     int acum=0;
     int i=0;
     int j=0;
@@ -527,7 +528,7 @@ void leeOrdenCS(mv* MV){
                 STOP(MV, opA, opB, instruccion); //Error
             }
         else{
-            printf("\n Fin de ejecucion");
+            printf("\n Fin de ejecucion\n");
             STOP(MV, opA, opB, instruccion); //Error
         }
 }
@@ -732,42 +733,42 @@ void setMemoria(mv* MV, int posMem, int valorB){
     }
 
     void JMP (mv* MV, int opA, int opB, char operacion){
-        (*MV).registros[IP] = opB;
+        (*MV).registros[IP] = punteroReg(*MV, CS) + opB;
     }
 
     void JZ (mv* MV, int opA, int opB, char operacion){
         if ((*MV).registros[CC] == 0x40000000 ){ //CC
-            (*MV).registros[IP] = opB; //IP
+            (*MV).registros[IP] = punteroReg(*MV, CS) + opB; //IP
         }
     }
 
     void JP(mv* MV, int opA, int opB, char operacion){
         if (((*MV).registros[CC] == 0)) {
-            (*MV).registros[IP] = opB; // IP
+            (*MV).registros[IP] = punteroReg(*MV, CS) + opB; // IP
         }
     }
 
     void JN (mv* MV, int opA, int opB, char operacion){
         if (((*MV).registros[CC]) == 0x80000000){ //CC
-            (*MV).registros[IP] = opB; //IP
+            (*MV).registros[IP] = punteroReg(*MV, CS) + opB; //IP
         }
     }
 
     void JNZ (mv* MV, int opA, int opB, char operacion){
         if ((*MV).registros[CC] != 0x40000000){ //CC
-            (*MV).registros[IP] = opB; //IP
+            (*MV).registros[IP] = punteroReg(*MV, CS) + opB; //IP
         }
     }
 
     void JNP (mv* MV, int opA, int opB, char operacion){
         if ((*MV).registros[CC] != 0){ //CC
-            (*MV).registros[IP] = opB; //IP
+            (*MV).registros[IP] = punteroReg(*MV, CS) + opB; //IP
         }
     }
 
     void JNN (mv* MV, int opA, int opB, char operacion){
         if (((*MV).registros[CC]) != 0x80000000){ //CC
-            (*MV).registros[IP] = opB; //IP
+            (*MV).registros[IP] = punteroReg(*MV, CS) + opB; //IP
         }
     }
 
@@ -910,7 +911,7 @@ void setMemoria(mv* MV, int posMem, int valorB){
 
         //IP apunta ya a la direccion a la siguiente direccion.
 
-         PUSH (MV,0,punteroReg(*MV,IP), 0x80); //revisar que el uso de punteroReg(MV,IP) sea correcto
+        PUSH (MV,0,punteroReg(*MV,IP), 0x80); //revisar que el uso de punteroReg(MV,IP) sea correcto
         
 
          //Salto
@@ -1177,8 +1178,10 @@ void SYSF(mv* MV){
             fwrite(MV->memoria, sizeof(char), 8, archivo);
             for (int i=0; i<16; i++)
                 fwrite(&MV->registros[i], sizeof(char), 4, archivo);
-            for (int i=0; i<8; i++)
-                fwrite(&MV->TSeg[i].Base + MV->TSeg[i].Tamanio, sizeof(char), 8, archivo);
+            for (int i=0; i<8; i++){
+                fwrite(&MV->TSeg[i].Base, sizeof(char), 4, archivo);
+                fwrite(&MV->TSeg[i].Tamanio, sizeof(char), 4, archivo);
+            }
             fwrite(&MV->memoria, sizeof(char), sumaTamaniosTabla(MV), archivo);
             fclose(archivo);
         }
@@ -1187,17 +1190,18 @@ void SYSF(mv* MV){
         }
         printf("Inserte orden para continuar: g, q o enter\n");
 
-        //scanf("%c", orden);
-        orden = 'g';
+        scanf("%c", &orden);
         if(orden == 'g'){
-            //no hace nada
+            printf("Archivo guardado\n");
         }
         else if(orden == 'q'){
             printf("Programa finalizado\n");
             STOP(MV, 0, 0, 0);
 
-        }else if(orden == '\n')
+        }else if(orden == '\n'){
             leeOrdenCS(MV);
+            SYSF(MV);
+        }
         else
             printf("caracter invalido \n");
     }
@@ -1247,7 +1251,7 @@ void BytesMEMORIA(mv MV, int *cont, int *operando){
 void Disassembler(mv* MV, int offset){
     void (*FuncOperandos[4])(mv, int *, int *) = {NULO,SACAREGISTRO,INMEDIATO,BytesMEMORIA};
     int cont=0; //Este contador es para saber cuantos bytes se leyeron
-    (*MV).registros[IP]=(*MV).TSeg[0].Base; //IP = CS
+    (*MV).registros[IP]= punteroReg(*MV, CS); //IP = CS
 
     char* nomFun[32] = {"SYS","JMP","JZ","JP","JN","JNZ","JNP","JNN","NOT","","","PUSH","POP","CALL","RET","STOP","MOV","ADD","SUB","SWAP","MUL","DIV","CMP","SHL","SHR","AND","OR","XOR","LDL","LDH","RND"};
 
