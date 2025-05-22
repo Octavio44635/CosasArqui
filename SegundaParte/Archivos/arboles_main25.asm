@@ -6,6 +6,7 @@ MAIN:   push bp
         sub sp, 4 ; root de ABB
         push eax
         push edx
+        sys 0x0F
         
         call    heap_init    ; inicializa memoria dinámica
 

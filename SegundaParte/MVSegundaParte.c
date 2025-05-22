@@ -117,6 +117,8 @@ int main(int argc, char *argv[]){
     int posVMX =buscaStringArgv(1, ".vmx", argv, argc);
 
     int posVMI=buscaStringArgv(1, ".vmi", argv, argc);
+    MV.registros[AC] = argv[posVMI];
+    printf("AC: %s \n", MV.registros[AC]);
 
     tamanio = buscaParametroTamanio(argc, argv);
     if(tamanio<0)
@@ -125,7 +127,6 @@ int main(int argc, char *argv[]){
     TamPS = creaPS(&MV, argc, argv);
 
     if(posVMX){
-        printf("entro en vmx, %d \n", posVMX);
         lectura (&MV, argv, tamanio, TamPS);
 
     }
@@ -135,10 +136,10 @@ int main(int argc, char *argv[]){
     int offsetEntry = MV.TSeg[(MV.registros[CS]>>16) & 0x0000FFFF].Base + MV.registros[IP] & 0x0000FFFF ; //Es para despues
     printf("offsetEntry: %04X \n", offsetEntry);
 
-    if(TamPS != 0)
+    if(TamPS == 0)
         cargaSS(&MV, 0, argc);
     //else
-        //cargaSS(&MV,MV->memoria[]) Terminar
+        //cargaSS(&MV,MV->memoria[]);
 
     LeeCS(&MV);
 
@@ -459,9 +460,8 @@ void LeeCS (mv *MV){
 
     char instruccion;
     int opA,opB,operacion,IPaux, cont=0;
-    printf("Ingresa a LeeCS");
     int indiceCS = (MV->registros[CS]>>16) & 0x0000FFFF;
-    while ((*MV).registros[IP]< MV->TSeg[indiceCS].Tamanio){  //IP <= (*MV).TSeg[0].Tamanio
+    while ((*MV).registros[IP] < MV->TSeg[indiceCS].Tamanio){  //IP <= (*MV).TSeg[0].Tamanio
         //Eliminar todo esto si la implementacion es correcta
         leeOrdenCS(MV);
         /*instruccion = (*MV).memoria[IPaux]; //levanto el dato del CS apuntado por IP
@@ -522,9 +522,9 @@ void leeOrdenCS(mv* MV){
 
     char instruccion;
     int opA,opB,operacion, cont=0;
-    printf("IP: %d", MV->registros[IP]);
 
 
+    
     instruccion = (*MV).memoria[MV->registros[IP]]; //levanto el dato del CS apuntado por IP
     opB=(instruccion&0xC0)>>6;    //4 valores, 2 bits
     opA=(instruccion&0x30)>>4;
@@ -545,7 +545,7 @@ void leeOrdenCS(mv* MV){
     MV->registros[IP] += cont;
     cont = 0;
 
-    if(operacion >= 0x0 & operacion <= 0x8)//Solo un operando
+    if((operacion >= 0x0 & operacion <= 0x8) || (operacion >=0x0B && operacion <= 0x0D))//Solo un operando
         if(opB != 0)//Se usa B, no A. Ignoramos A
             Funciones[operacion](MV, 0, BytesB, instruccion); //Llama a la funcion correspondiente
         else{
@@ -988,6 +988,7 @@ void SYS (mv* MV, int opA, int opB, char operacion){
 
     //Hasta aca todo claro
 
+    printf("SYS: %d\n", valorB);
     if (valorB == 1)
         SYSR(MV, puntEdx, CH, CL, AL);
     else
@@ -1004,11 +1005,13 @@ void SYS (mv* MV, int opA, int opB, char operacion){
             else if(valorB == 7){
                 system("clear");
             }
-            else if(valorB == 0xF){
+            else if(valorB == 0x0F){
                 SYSF(MV);
             }
+            else{
                 printf("Error: syscall no implementada\n");
                 STOP(MV, 0, 0, 0); //Error
+            }
         }
 }
 
@@ -1189,15 +1192,14 @@ void SYSTRINGW(mv* MV, int punt, short int CX, short int AL){
 }
 
 void SYSF(mv* MV){
-    /*char *punteroArgv = (int) ValoropST(3, MV->registros[SS], MV); //Devuelve el puntero a memoria
-    int punteroArgc = ValoropST(3, MV->registros[SS] + 4 , MV); //Devuelve el nro de elementos
     char* ext = ".vmi";
-    int Vmi = buscaStringArgv(1, ext, punteroArgv, punteroArgc);
-    Vmi = punteroArgv[Vmi];
-    FILE *archivo = fopen((char *) Vmi, "wb");
+    //int Vmi = ;
+    printf("Archivo: %s\n", MV->registros[AC]);
+    FILE *archivo = fopen(MV->registros[AC], "wb");
     char orden='\n';
     if(orden == '\n'){
         if(archivo){
+            printf("Archivo abierto\n");
             fwrite(MV->memoria, sizeof(char), 8, archivo);
             for (int i=0; i<16; i++)
                 fwrite(&MV->registros[i], sizeof(char), 4, archivo);
@@ -1208,11 +1210,11 @@ void SYSF(mv* MV){
         }
         else{
             printf("Error, no se pudo abrir el archivo .vmi \n");
-            STOP(MV, 0, 0, 0); //Error
         }
         printf("Inserte orden para continuar: g, q o enter\n");
 
-        scanf("%c", orden);
+        //scanf("%c", orden);
+        orden = 'g';
         if(orden == 'g'){
             //no hace nada
         }
@@ -1225,7 +1227,10 @@ void SYSF(mv* MV){
         else
             printf("caracter invalido \n");
     }
-    */
+    else{
+        printf("Error, no se pudo abrir el archivo .vmi \n");
+        STOP(MV, 0, 0, 0); //Error
+    }
 }
 
 int sumaTamaniosTabla(mv* MV){
@@ -1272,7 +1277,6 @@ void Disassembler(mv* MV, int offset){
 
     char* nomFun[32] = {"SYS","JMP","JZ","JP","JN","JNZ","JNP","JNN","NOT","","","PUSH","POP","CALL","RET","STOP","MOV","ADD","SUB","SWAP","MUL","DIV","CMP","SHL","SHR","AND","OR","XOR","LDL","LDH","RND"};
 
-    printf("Registro IP = %04X\n", (*MV).registros[IP]);
     int indiceCS = (MV->registros[CS] >> 16) & 0x0000FFFF; //Entrada Tabla Segmentos
     while((*MV).registros[IP] < (*MV).TSeg[indiceCS].Base + (*MV).TSeg[indiceCS].Tamanio){
         char instruccion = (*MV).memoria[MV->TSeg[indiceCS].Base + (*MV).registros[IP]];
@@ -1291,7 +1295,7 @@ void Disassembler(mv* MV, int offset){
 
         (*MV).registros[IP] += cont+1;
         cont = 0; //Reinicio el contador
-         //Aumento el IP
+        //Aumento el IP
 
         if(tipoA == 1)
             operandoA &= 0X00FF;
@@ -1375,7 +1379,7 @@ void Disassembler(mv* MV, int offset){
 }
 
 char* EscrReg(mv MV, int operando){
-    char* nombresRegistros[16] = {"CS", "DS", "", "", "", "IP", "", "", "CC", "AC", "EAX", "EBX", "ECX", "EDX", "EEX", "EFX"};
+    char* nombresRegistros[16] = {"CS", "DS", "ES", "SS", "KS", "IP", "SP", "BP", "CC", "AC", "EAX", "EBX", "ECX", "EDX", "EEX", "EFX"};
     static char palabra[16] = "";
     char sector = (operando >> 2) & 0x3, registro = (operando >> 4) & 0x0F;
     char aux[3] = {'\0', '\0', '\0'};

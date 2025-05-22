@@ -11,10 +11,8 @@
             "request": "launch",
             "program": "C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/SegundaParte/a.exe",
             "args": [
-                "C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/SegundaParte/Archivos/alloc25.vmx",
-                "-p",
-                "pal1",
-                "pal2"
+                "C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/SegundaParte/Archivos/arboles_main25.vmx",
+                "-d"
             ],
             "stopAtEntry": false,
             "cwd": "C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/SegundaParte",
