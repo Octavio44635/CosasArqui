@@ -6,13 +6,14 @@ MAIN:   push bp
         sub sp, 4 ; root de ABB
         push eax
         push edx
-        sys 0x0F
+        mov cx, 0x6
+        sys 0x0f
         
         call    heap_init    ; inicializa memoria dinámica
 
         mov edx, bp
         add edx, root        ; edx = &root
-        mov [edx], null      ; inicializo root = null
+        mov b[edx], null      ; inicializo root = null
 
         push 20
         call btn_new

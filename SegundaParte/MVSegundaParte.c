@@ -266,12 +266,7 @@ void CargaRegistros(mv* MV, int ArregloTamanios[], int offsetEntry, int tamanio)
     (*MV).registros[BP] = -1;
     (*MV).registros[CC] = 0;
     (*MV).registros[AC] = 0;
-    (*MV).registros[EAX] = 0;
-    (*MV).registros[EBX] = 0;
-    (*MV).registros[ECX] = 0;
-    (*MV).registros[EDX] = 0;
-    (*MV).registros[EEX] = 0;
-    (*MV).registros[EFX] = 0;
+    
 
     for(i=0; i<TamanioTablaS; i++){
         if(i<6){
@@ -317,6 +312,13 @@ void CargaRegistros(mv* MV, int ArregloTamanios[], int offsetEntry, int tamanio)
     for(i=0; i<7; i++){
         printf("Indice %d: %04X %04X \n", i, (*MV).TSeg[i].Base, (*MV).TSeg[i].Tamanio);
     }
+
+    (*MV).registros[EAX] = punteroReg(*MV, DS);
+    (*MV).registros[EBX] = punteroReg(*MV, DS);
+    (*MV).registros[ECX] = punteroReg(*MV, DS);
+    (*MV).registros[EDX] = punteroReg(*MV, DS);
+    (*MV).registros[EEX] = punteroReg(*MV, DS);
+    (*MV).registros[EFX] = punteroReg(*MV, DS);
 }
 
 int sumaTamanio(int arreglo[]){
@@ -572,8 +574,8 @@ void MEMORIA(mv MV, int *cont, int *op){
     PosMem = MV.TSeg[basereg].Base + offset + inmediato;
     //*op = MV.memoria[PosMem];
 
-    if (PosMem >= Tamtot) {
-        printf("Error: dirección de memoria fuera de rango\n");
+    if (PosMem >= MV.TSeg[basereg].Base + MV.TSeg[basereg].Tamanio) {
+        printf("Error: direccion de memoria fuera de rango %d\n", MV.registros[IP]);
         STOP(&MV, PosMem, 0, 0);
     }
 
@@ -976,7 +978,7 @@ void SYS (mv* MV, int opA, int opB, char operacion){
                 SYSTRINGW(MV, puntEdx, ((CH<<8) & 0xFF00) | CL, 0);
             }
             else if(valorB == 7){
-                system("clear");
+                system("cls");
             }
             else if(valorB == 0x0F){
                 SYSF(MV);
@@ -1139,7 +1141,7 @@ void EscrFormato(mv* MV, int i,int punt, short int AL, char CH){
 }
 
 void SYSTRINGR(mv* MV, int punt, short int CX, short int AL){
-    char *string;
+    char *string = malloc(sizeof(char)*CX);
 
     printf("Escribir cadena de %d largo: \n" ,CX);
     scanf("%s", string);
@@ -1151,39 +1153,54 @@ void SYSTRINGR(mv* MV, int punt, short int CX, short int AL){
     for (;i<CX;i++){
         MV->memoria[punt+i] = string[i];
     }
-    MV->memoria[punt+i+1] = '\0';
+    MV->memoria[punt+i] = '\0';
 
 //Entiendo esta bien
 }
 //Se hicieron cambios en estas funciones, revisar
 void SYSTRINGW(mv* MV, int punt, short int CX, short int AL){
-    char *string;
-    for (int i=0; i<CX; i++){
-        printf("%c", (*MV).memoria[punt+i]);
+    while(MV->memoria[punt] != '\0'){
+        printf("%c", (*MV).memoria[punt]);
+        punt += 1;
     }
     printf("\n");
 }
 
 void SYSF(mv* MV){
     char* ext = ".vmi";
-    //int Vmi = ;
+    short int tamanio = sizeof(char)*sumaTamaniosTabla(MV);
+    char version = 0x01;
+    unsigned char aux;
     printf("Archivo: %s\n", MV->registros[AC]);
     FILE *archivo = fopen((char*) MV->registros[AC], "wb");
     char orden='\n';
     if(orden == '\n'){
         if(archivo){
             printf("Archivo abierto\n");
-            char* header = "VMI251";
-            char* tamanio = sizeof(char)*sumaTamaniosTabla(MV);
-            fwrite(&header, sizeof(char), strlen(header), archivo);
-            fwrite(&tamanio, sizeof(char), 1, archivo);
+            
+            fwrite("VMI251", sizeof(char), 5, archivo);
+            fwrite(&version, sizeof(char), 1, archivo);
+            aux = (tamanio>>8) & 0x00FF;
+            fwrite(&aux, sizeof(char), 1, archivo);
+            aux = tamanio & 0x00FF;
+            fwrite(&aux, sizeof(char), 1, archivo);
 
-            for (int i=0; i<16; i++)
-                fwrite(&MV->registros[i], sizeof(char), 4, archivo);
-            for (int i=0; i<8; i++){
-                fwrite(&MV->TSeg[i].Base, sizeof(char), 4, archivo);
-                fwrite(&MV->TSeg[i].Tamanio, sizeof(char), 4, archivo);
-            }
+
+            for (int i=0; i<TamanioRegistros; i++)
+                for(int j =0; j<4; j++){
+                    aux = (MV->registros[i] >> ((3-j)*8)) & 0x00FF;
+                    fwrite(&aux, sizeof(char), 1, archivo);
+                }
+            for (int i=0; i<TamanioTablaS; i++){
+                for(int j=0; j<2; j++){
+                    aux = (MV->TSeg[i].Base >> ((1-j)*8)) & 0x00FF;
+                    fwrite(&aux, sizeof(char), 1, archivo);
+                }
+                for(int j=0; j<2; j++){
+                    aux = (MV->TSeg[i].Tamanio >> ((1-j)*8)) & 0x00FF;
+                    fwrite(&aux, sizeof(char), 1, archivo);
+                }
+                }
             fwrite(&MV->memoria, sizeof(char), tamanio, archivo);
             fclose(archivo);
         }
@@ -1250,15 +1267,45 @@ void BytesMEMORIA(mv MV, int *cont, int *operando){
     *operando = todo;
 }
 
+void DisassemblerKS(mv MV){
+
+    //El dia que exista un KS habria que testear
+
+    int indiceKS = (punteroReg(MV,KS)>>16) & 0x00ffff;
+    while(MV.registros[IP] < MV.TSeg[indiceKS].Base + MV.TSeg[indiceKS].Tamanio){
+        char caracter = (MV).memoria[punteroReg(MV,IP)];
+        while(caracter != '\0'){
+            printf("  %02X ", caracter);
+            MV.registros[IP] += 1;
+            caracter = MV.memoria[punteroReg(MV,IP)];
+
+        }
+        printf(" | ");
+        while(caracter != '\0'){
+            if(caracter < 32 || caracter == 127){
+                printf("  .  ");
+            }
+            else{
+                printf("  %c  ", MV.memoria[punteroReg(MV,IP)]);
+            }
+        }
+
+        MV.registros[IP] += 1;
+    }
+        
+}
 void Disassembler(mv* MV, int offset){
     void (*FuncOperandos[4])(mv, int *, int *) = {NULO,SACAREGISTRO,INMEDIATO,BytesMEMORIA};
     int cont=0; //Este contador es para saber cuantos bytes se leyeron
+    if( MV->registros[KS] > 0 && MV->TSeg[MV->registros[KS]>>16].Tamanio > 0){
+        printf("Disassembler KS:\n");
+        MV->registros[IP]= punteroReg(*MV, KS); //IP = KS
+        DisassemblerKS(*MV);
+    }
     (*MV).registros[IP]= punteroReg(*MV, CS); //IP = CS
-
     char* nomFun[32] = {"SYS","JMP","JZ","JP","JN","JNZ","JNP","JNN","NOT","","","PUSH","POP","CALL","RET","STOP","MOV","ADD","SUB","SWAP","MUL","DIV","CMP","SHL","SHR","AND","OR","XOR","LDL","LDH","RND"};
 
-    int indiceCS = (MV->registros[CS] >> 16) & 0x0000FFFF; //Entrada Tabla Segmentos
-    while((*MV).registros[IP] < (*MV).TSeg[indiceCS].Base + (*MV).TSeg[indiceCS].Tamanio){ //Este es un ejemplo de lo que podria haberse hecho en lectura en lugar de tomar el valor del IP absoluto
+    while((*MV).registros[IP] < (*MV).TSeg[punteroReg(*MV,CS)].Base + (*MV).TSeg[punteroReg(*MV,CS)].Tamanio){ //Este es un ejemplo de lo que podria haberse hecho en lectura en lugar de tomar el valor del IP absoluto
         char instruccion = (*MV).memoria[punteroReg(*MV,IP)]; //revisar el cambio en la direccion
         //Ya se mostro la orden, ahora se procede a mostrar los operandos
         char tipoA = (instruccion >> 4) & 0x3, operacion = instruccion & 0x1F,tipoB = (instruccion >> 6) & 0x3;
@@ -1266,8 +1313,10 @@ void Disassembler(mv* MV, int offset){
         instruccion = instruccion & 0x00FF;
         //El tamaño y el tipo son iguales
 
-        if(MV->registros[IP] & 0x0000FFFF == offset) //Se extrae el offset directamente del IP
+        if(MV->registros[IP] == offset) //Se extrae el offset directamente del IP
             printf(">");
+        else
+            printf(" ");
         FuncOperandos[tipoB](*MV, &cont, &operandoB);
         FuncOperandos[tipoA](*MV, &cont, &operandoA);
 
@@ -1415,13 +1464,13 @@ char sectorMemoria(char sector){
         case 0:
             return ' '; //Muestro l o ''?
             break;
-        case 1:
+        case 3:
             return 'b';
             break;
         case 2:
             return 'w';
             break;
-        case 3:
+        case 1:
             return '#'; //Por motivos de seguridad esto va a estar aca hasta el dia de la entrega
             break;
     }
