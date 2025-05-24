@@ -186,23 +186,24 @@ void lectura(mv* MV, char* archivo, int tamanio, int TamPS){
             fclose(arch);
         }
         else if(MV->memoria[5] == 0x02){
-            fread((*MV).memoria+8,sizeof(char),10,arch); //Lectura de la cabecera de Archivo VMX
-            arregloTamanios[3] = (((*MV).memoria[8]&0x00FF) << 8 )| ((*MV).memoria[9] & 0x00FF); //DS
-            arregloTamanios[4] = (((*MV).memoria[10]&0x00FF) << 8 )| ((*MV).memoria[11] & 0x00FF); //ES
-            arregloTamanios[5] = (((*MV).memoria[12]&0x00FF) << 8 )| ((*MV).memoria[13] & 0x00FF); //SS
-            arregloTamanios[1] = (((*MV).memoria[14]&0x00FF) << 8 )| ((*MV).memoria[15] & 0x00FF); //KS
-            offsetEntry = ((*MV).memoria[16]&0x00FF) << 8 | ((*MV).memoria[17] & 0x00FF);
+            fread((*MV).memoria,sizeof(char),10,arch); //Lectura de la cabecera de Archivo VMX
+            arregloTamanios[3] = (((*MV).memoria[0]&0x00FF) << 8 )| ((*MV).memoria[1] & 0x00FF); //DS
+            arregloTamanios[4] = (((*MV).memoria[2]&0x00FF) << 8 )| ((*MV).memoria[3] & 0x00FF); //ES
+            arregloTamanios[5] = (((*MV).memoria[4]&0x00FF) << 8 )| ((*MV).memoria[5] & 0x00FF); //SS
+            arregloTamanios[1] = (((*MV).memoria[6]&0x00FF) << 8 )| ((*MV).memoria[7] & 0x00FF); //KS
+            offsetEntry = ((*MV).memoria[8]&0x00FF) << 8 | ((*MV).memoria[9] & 0x00FF);
 
             arregloTamanios[0] = TamPS;
             arregloTamanios[2] = tamCS;
 
 
-            for(int i=8; i<18; i++){
+            for(int i=0; i<10; i++){
                 printf("i: %d ; memoria: %02X \n",i, MV->memoria[i]);
             }
             printf("Tamanios: %d %d %d %d %d %d\n", arregloTamanios[0], arregloTamanios[1], arregloTamanios[2], arregloTamanios[3], arregloTamanios[4], arregloTamanios[5]);
-            fread(MV->memoria + TamPS + tamKS,sizeof(char), tamCS, arch); //Lectura de la memoria
+            fread(MV->memoria + TamPS + arregloTamanios[1],sizeof(char), tamCS, arch); //Lectura de la memoria
         }
+        fread(MV->memoria + arregloTamanios[0], sizeof(char), arregloTamanios[1],arch);
         if(tamanio >= sumaTamanio(arregloTamanios))
             CargaRegistros(MV, arregloTamanios, offsetEntry, tamanio);
         else{
@@ -465,12 +466,7 @@ void cargaSS(mv* MV, int punt, int argc){
 }
 
 void LeeCS (mv *MV){
-    void (*Funciones[32])(mv*, int, int, char) = {SYS,JMP,JZ,JP,JZ,JNZ,JNP,JNN,NOT,EMPTY,EMPTY,PUSH,POP,CALL,RET,STOP,MOV,ADD,SUB,SWAP,MUL,DIV,CMP,SHL,SHR,AND,OR,XOR,LDL,LDH,RND,EMPTY};
-    void (*FuncOperandos[4])(mv, int *, int *) = {NULO,SACAREGISTRO,INMEDIATO,MEMORIA};
 
-
-    char instruccion;
-    int opA,opB,operacion,IPaux, cont=0;
     int indiceCS = (MV->registros[CS]>>16) & 0x0000FFFF;
     while ((MV->registros[IP]&0x0000FFFF) < MV->TSeg[indiceCS].Tamanio){//Eso esta bien por que se compara el offset absoluto con el tamaño que tambien es absoluto
         leeOrdenCS(MV);
@@ -510,7 +506,7 @@ void leeOrdenCS(mv* MV){
         if(opB != 0)//Se usa B, no A. Ignoramos A
             Funciones[operacion](MV, 0, BytesB, instruccion); //Llama a la funcion correspondiente
         else{
-            printf("Error, operando B nulo\n");
+            printf("Error, operando B nulo \n");
             STOP(MV, opA, opB, instruccion); //Error
         }
     else
@@ -894,12 +890,12 @@ void setMemoria(mv* MV, int posMem, int valorB){
         int  limite= base + (*MV).TSeg[indice].Tamanio;
         int  valor;
 
-        if ((*MV).registros[SP]> limite){
+        if (punteroReg(*MV, IP)> limite){
             printf("Error: Stack underflow\n");
             STOP(MV, 0, 0, 0);
         }
 
-        valor = ValoropST(3, (*MV).registros[SP], MV); //Extrae valor de la memoria
+        valor = ValoropST(3, punteroReg(*MV,SP), MV); //Extrae valor de la memoria
 
         set(MV, opB, tipoB, valor);  // Escribe valor en el destino.
         (*MV).registros[SP] +=4;  //Incremento SP
@@ -942,7 +938,8 @@ int punteroReg(mv MV, int dirReg){
 
     short int basereg = (MV.registros[dirReg] >> 16) & 0x0000FFFF;
     short int offset= MV.registros[dirReg] & 0x0000FFFF;
-    return MV.TSeg[basereg].Base + offset;
+    int ptr = MV.TSeg[basereg].Base + offset; //Direccion de memoria a la que apunta el registro
+    return ptr;
 
 }
 
@@ -1271,41 +1268,57 @@ void DisassemblerKS(mv MV){
 
     //El dia que exista un KS habria que testear
 
-    int indiceKS = (punteroReg(MV,KS)>>16) & 0x00ffff;
-    while(MV.registros[IP] < MV.TSeg[indiceKS].Base + MV.TSeg[indiceKS].Tamanio){
+    int indiceKS = (MV.registros[KS]>>16) & 0x00ffff, tamanioMaxKS = MV.TSeg[indiceKS].Base + MV.TSeg[indiceKS].Tamanio;
+    int ptrIP = punteroReg(MV,IP), cont=0;
+    while(ptrIP < tamanioMaxKS){
         char caracter = (MV).memoria[punteroReg(MV,IP)];
-        while(caracter != '\0'){
-            printf("  %02X ", caracter);
-            MV.registros[IP] += 1;
-            caracter = MV.memoria[punteroReg(MV,IP)];
+        if(caracter != '\0'){
+            printf("[%04X]  ", punteroReg(MV,IP));
+            while(caracter != '\0'){
+                printf("  %02X ", caracter);
+                MV.registros[IP] += 1;
+                cont +=1;
+                caracter = MV.memoria[punteroReg(MV,IP)];
 
+            }
         }
         printf(" | ");
-        while(caracter != '\0'){
-            if(caracter < 32 || caracter == 127){
-                printf("  .  ");
-            }
-            else{
-                printf("  %c  ", MV.memoria[punteroReg(MV,IP)]);
+        MV.registros[IP] -= cont;
+        caracter = MV.memoria[punteroReg(MV,IP)];
+        if(caracter != '\0'){
+            while(caracter != '\0' ){
+                if(caracter < 32 || caracter == 127){
+                    printf("  .  ");
+                }
+                else{
+                    printf("%c", caracter);
+                }
+                MV.registros[IP] += 1;
+                caracter = MV.memoria[punteroReg(MV,IP)];
             }
         }
 
         MV.registros[IP] += 1;
+        cont = 0;
+        ptrIP = punteroReg(MV,IP);
+        printf("\n");
     }
         
 }
+
 void Disassembler(mv* MV, int offset){
     void (*FuncOperandos[4])(mv, int *, int *) = {NULO,SACAREGISTRO,INMEDIATO,BytesMEMORIA};
     int cont=0; //Este contador es para saber cuantos bytes se leyeron
-    if( MV->registros[KS] > 0 && MV->TSeg[MV->registros[KS]>>16].Tamanio > 0){
+    int indice = (MV->registros[KS]>>16) & 0x00FFFF; //Entrada Tabla Segmentos
+    if( MV->TSeg[indice].Tamanio > 0){
         printf("Disassembler KS:\n");
         MV->registros[IP]= punteroReg(*MV, KS); //IP = KS
         DisassemblerKS(*MV);
     }
     (*MV).registros[IP]= punteroReg(*MV, CS); //IP = CS
     char* nomFun[32] = {"SYS","JMP","JZ","JP","JN","JNZ","JNP","JNN","NOT","","","PUSH","POP","CALL","RET","STOP","MOV","ADD","SUB","SWAP","MUL","DIV","CMP","SHL","SHR","AND","OR","XOR","LDL","LDH","RND"};
-
-    while((*MV).registros[IP] < (*MV).TSeg[punteroReg(*MV,CS)].Base + (*MV).TSeg[punteroReg(*MV,CS)].Tamanio){ //Este es un ejemplo de lo que podria haberse hecho en lectura en lugar de tomar el valor del IP absoluto
+    indice = (MV->registros[CS]>>16) & 0x00FFFF;
+    while(punteroReg(*MV, IP) < (*MV).TSeg[indice].Base + (*MV).TSeg[indice].Tamanio){ //Este es un ejemplo de lo que podria haberse hecho en lectura en lugar de tomar el valor del IP absoluto
         char instruccion = (*MV).memoria[punteroReg(*MV,IP)]; //revisar el cambio en la direccion
         //Ya se mostro la orden, ahora se procede a mostrar los operandos
         char tipoA = (instruccion >> 4) & 0x3, operacion = instruccion & 0x1F,tipoB = (instruccion >> 6) & 0x3;
