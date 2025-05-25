@@ -195,12 +195,7 @@ void lectura(mv* MV, char* archivo, int tamanio, int TamPS){
 
             arregloTamanios[0] = TamPS;
             arregloTamanios[2] = tamCS;
-
-
-            for(int i=0; i<10; i++){
-                printf("i: %d ; memoria: %02X \n",i, MV->memoria[i]);
-            }
-            printf("Tamanios: %d %d %d %d %d %d\n", arregloTamanios[0], arregloTamanios[1], arregloTamanios[2], arregloTamanios[3], arregloTamanios[4], arregloTamanios[5]);
+            
             fread(MV->memoria + TamPS + arregloTamanios[1],sizeof(char), tamCS, arch); //Lectura de la memoria
         }
         fread(MV->memoria + arregloTamanios[0], sizeof(char), arregloTamanios[1],arch);
@@ -235,16 +230,28 @@ void lecturaVMI(mv* MV, int tamanio, char* arch){
             STOP(MV, 0, 0, 0); //Error
         }
 
-        if((*MV).memoria[5] == '1'){
+        if((*MV).memoria[5] == 1){
             tamanio = ((*MV).memoria[6]&0x00FF) << 8 | ((*MV).memoria[7] & 0x00FF);
         }
-        fread(&MV->memoria+8,sizeof(char),64,archivo); //Lectura de la memoria para Registros
-        leeRegistrosVMI(MV);
 
-        fread(&MV->memoria + 8,sizeof(char), 32,archivo); //Lectura de la memoria para Tabla
-        leeTablaVMI(MV);
+        int pos=0;
+        for(i=0; i<TamanioRegistros; i++){
+            fread((MV)->memoria,sizeof(char),4,archivo);
+            (*MV).registros[i] = ((*MV).memoria[pos] & 0x00FF) << 24;
+            (*MV).registros[i] = (*MV).registros[i] | ((*MV).memoria[pos+1] & 0x00FF) << 16;
+            (*MV).registros[i] = (*MV).registros[i] | ((*MV).memoria[pos+2] & 0x00FF) << 8;
+            (*MV).registros[i] = (*MV).registros[i] | ((*MV).memoria[pos+3] & 0x00FF);
+    }
 
-        fread(&MV->memoria + 8,sizeof(char),tamanio,archivo); //Lectura de la memoria
+        pos=0; i=0;
+        for(;i<8; i++){
+            fread((MV)->memoria,sizeof(char),4,archivo);
+            
+            MV->TSeg[i].Base = ((MV->memoria[pos] << 8) & 0xFF00) | (MV->memoria[pos+1] & 0x00FF);
+            MV->TSeg[i].Tamanio = ((MV->memoria[pos+2] & 0x00FF)<< 8) | (MV->memoria[pos+3] & 0x00FF);
+        }
+
+        fread((MV)->memoria,sizeof(char),tamanio,archivo); //Lectura de la memoria
 
         //Deberia estar todo correctamente cargado aca
 
@@ -295,24 +302,14 @@ void CargaRegistros(mv* MV, int ArregloTamanios[], int offsetEntry, int tamanio)
         (*MV).registros[ES] = ((i++<<16) & 0xFFFF0000);
     if(ArregloTamanios[SS+2] != 0){
         (*MV).registros[SS] = ((i<<16) & 0xFFFF0000);
-        (*MV).registros[SP] = ((i<<16) & 0xFFFF0000 | (*MV).TSeg[SS].Tamanio);
+        (*MV).registros[SP] = ((i<<16) & 0xFFFF0000 | (*MV).TSeg[i].Tamanio);
     }
     for(;j<TamanioTablaS; j++){
             (*MV).TSeg[j].Base = -1;
             (*MV).TSeg[j].Tamanio = 0;
         }
 
-    (*MV).registros[IP]=(*MV).registros[CS] | offsetEntry; // Inicializacion IP
-
-    printf("Registros: \n");
-    for(i=0; i<7; i++){
-        printf("Registro %d: %08X \n", i, (*MV).registros[i]);
-    }
-
-    printf("Tabla: \n");
-    for(i=0; i<7; i++){
-        printf("Indice %d: %04X %04X \n", i, (*MV).TSeg[i].Base, (*MV).TSeg[i].Tamanio);
-    }
+    (*MV).registros[IP]=(*MV).registros[CS] | offsetEntry;
 
     (*MV).registros[EAX] = punteroReg(*MV, DS);
     (*MV).registros[EBX] = punteroReg(*MV, DS);
@@ -424,26 +421,6 @@ int buscaStringArgv(int archivo, char* str, char* argv[], int argc){
     }
 }
 
-void leeRegistrosVMI(mv* MV){
-    int i=0, pos=8; //parte de la cabecera
-    for(i=0; i<TamanioRegistros; i++){
-        (*MV).registros[i] = ((*MV).memoria[pos] & 0x00FF) << 24;
-        (*MV).registros[i] = (*MV).registros[i] | ((*MV).memoria[pos+1] & 0x00FF) << 16;
-        (*MV).registros[i] = (*MV).registros[i] | ((*MV).memoria[pos+2] & 0x00FF) << 8;
-        (*MV).registros[i] = (*MV).registros[i] | ((*MV).memoria[pos+3] & 0x00FF);
-        pos += 4;
-    }
-    //Los registros deberian de estar cargados
-}
-
-void leeTablaVMI(mv* MV){
-    int i=0, pos=8;
-    for(;i<8; i++){
-        MV->TSeg[i].Base = ((MV->memoria[pos] & 0x00FF)<< 8) | (MV->memoria[pos+1] & 0x00FF);
-        MV->TSeg[i].Tamanio = ((MV->memoria[pos+2] & 0x00FF)<< 8) | (MV->memoria[pos+3] & 0x00FF);
-        pos += 4;
-    }
-}
 
 void cargaSS(mv* MV, int punt, int argc){
 
@@ -453,14 +430,15 @@ void cargaSS(mv* MV, int punt, int argc){
     PUSH(MV, 0, -1, 0b10000000);
 
     printf("SS \n");
-    int i=0;
-    int posMem = MV->TSeg[SS].Base + MV->registros[SP] & 0x0000FFFF;
+    int i=0, indiceSP= (MV->registros[SP]>>16)& 0x0000FFFF;
+    int posMem = MV->TSeg[indiceSP].Base + MV->registros[SP] & 0x0000FFFF;
     for(i=0; i<3; i++){
-        printf("posMem: %04X \n", posMem);
+        printf("[%04X]  ", posMem);
         for(int j=0; j<4; j++){
-            printf("%02X \n ", MV->memoria[posMem+j]);
+            printf("%02X ", MV->memoria[posMem+j]);
         }
         posMem += 4;
+        printf("\n");
     }
     //Solucionado
 }
@@ -667,7 +645,7 @@ int ObtenerTamanioCelda(mv MV,int op){
     switch(op & 0x3){
       case 0: return 4; //long
       case 1:
-            printf ("Error: tamanio de operando no valido");
+            printf ("Error: tamanio de operando no valido \n [%04X] \n", MV.registros[IP]);
             STOP (&MV,0,0,0);
       case 2: return 2; //word
       case 3: return 1; //byte
@@ -1156,6 +1134,7 @@ void SYSTRINGR(mv* MV, int punt, short int CX, short int AL){
 }
 //Se hicieron cambios en estas funciones, revisar
 void SYSTRINGW(mv* MV, int punt, short int CX, short int AL){
+    printf("[%04x]  ", punt);
     while(MV->memoria[punt] != '\0'){
         printf("%c", (*MV).memoria[punt]);
         punt += 1;
@@ -1188,6 +1167,9 @@ void SYSF(mv* MV){
                     aux = (MV->registros[i] >> ((3-j)*8)) & 0x00FF;
                     fwrite(&aux, sizeof(char), 1, archivo);
                 }
+
+            //que no cargue ps, trabajo en curso
+            int boolPS = (MV->TSeg[MV->registros[KS]>>16].Tamanio > 0 && (MV->registros[KS]>>16) || (MV->registros[CS]>>16) );
             for (int i=0; i<TamanioTablaS; i++){
                 for(int j=0; j<2; j++){
                     aux = (MV->TSeg[i].Base >> ((1-j)*8)) & 0x00FF;
@@ -1308,15 +1290,17 @@ void DisassemblerKS(mv MV){
 
 void Disassembler(mv* MV, int offset){
     void (*FuncOperandos[4])(mv, int *, int *) = {NULO,SACAREGISTRO,INMEDIATO,BytesMEMORIA};
+    char* nomFun[32] = {"SYS","JMP","JZ","JP","JN","JNZ","JNP","JNN","NOT","","","PUSH","POP","CALL","RET","STOP","MOV","ADD","SUB","SWAP","MUL","DIV","CMP","SHL","SHR","AND","OR","XOR","LDL","LDH","RND"};
     int cont=0; //Este contador es para saber cuantos bytes se leyeron
+
     int indice = (MV->registros[KS]>>16) & 0x00FFFF; //Entrada Tabla Segmentos
     if( MV->TSeg[indice].Tamanio > 0){
         printf("Disassembler KS:\n");
         MV->registros[IP]= punteroReg(*MV, KS); //IP = KS
         DisassemblerKS(*MV);
     }
+    
     (*MV).registros[IP]= punteroReg(*MV, CS); //IP = CS
-    char* nomFun[32] = {"SYS","JMP","JZ","JP","JN","JNZ","JNP","JNN","NOT","","","PUSH","POP","CALL","RET","STOP","MOV","ADD","SUB","SWAP","MUL","DIV","CMP","SHL","SHR","AND","OR","XOR","LDL","LDH","RND"};
     indice = (MV->registros[CS]>>16) & 0x00FFFF;
     while(punteroReg(*MV, IP) < (*MV).TSeg[indice].Base + (*MV).TSeg[indice].Tamanio){ //Este es un ejemplo de lo que podria haberse hecho en lectura en lugar de tomar el valor del IP absoluto
         char instruccion = (*MV).memoria[punteroReg(*MV,IP)]; //revisar el cambio en la direccion
@@ -1326,7 +1310,7 @@ void Disassembler(mv* MV, int offset){
         instruccion = instruccion & 0x00FF;
         //El tamaño y el tipo son iguales
 
-        if(MV->registros[IP] == offset) //Se extrae el offset directamente del IP
+        if(MV->registros[IP] == offset)
             printf(">");
         else
             printf(" ");
@@ -1336,8 +1320,7 @@ void Disassembler(mv* MV, int offset){
         printf("[%04X] %02X ", (*MV).registros[IP], instruccion&0x00FF);
 
         (*MV).registros[IP] += cont+1;
-        cont = 0; //Reinicio el contador
-        //Aumento el IP
+        cont = 0;
 
         if(tipoA == 1)
             operandoA &= 0X00FF;
