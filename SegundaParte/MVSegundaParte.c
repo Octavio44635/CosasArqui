@@ -34,7 +34,7 @@ typedef struct{
 
 
 typedef struct{
-    char memoria[Tamtot];
+    char* memoria;
     int registros[TamanioRegistros];
     TablaS TSeg[TamanioTablaS];} mv;
 
@@ -128,6 +128,7 @@ int main(int argc, char *argv[]){
     tamanio = buscaParametroTamanio(argc, argv);
     if(tamanio<0)
         tamanio = Tamtot;
+    MV.memoria = malloc(tamanio*sizeof(char));
     argcPS = argc;
     TamPS = creaPS(&MV,&argcPS, argv, &ptr);
 
