@@ -129,6 +129,7 @@ int main(int argc, char *argv[]){
     if(tamanio<0)
         tamanio = Tamtot;
     MV.memoria = malloc(tamanio*sizeof(char));
+    
     argcPS = argc;
     TamPS = creaPS(&MV,&argcPS, argv, &ptr);
 
@@ -1135,7 +1136,7 @@ void SYSTRINGR(mv* MV, int punt, short int CX, short int AL){
 }
 //Se hicieron cambios en estas funciones, revisar
 void SYSTRINGW(mv* MV, int punt, short int CX, short int AL){
-    printf("[%04x]  ", punt);
+    printf("[%04X]  ", punt);
     while(MV->memoria[punt] != '\0'){
         printf("%c", (*MV).memoria[punt]);
         punt += 1;
@@ -1256,27 +1257,30 @@ void DisassemblerKS(mv MV){
     while(ptrIP < tamanioMaxKS){
         char caracter = (MV).memoria[punteroReg(MV,IP)];
         if(caracter != '\0'){
-            printf("[%04X]  ", punteroReg(MV,IP));
-            while(caracter != '\0'){
-                printf("  %02X ", caracter);
+            printf(" [%04X]", ptrIP);
+            while(caracter != '\0' && cont <6){
+                printf(" %02X", caracter);
                 MV.registros[IP] += 1;
                 cont +=1;
                 caracter = MV.memoria[punteroReg(MV,IP)];
-
             }
+            if(cont>=6)
+                printf(" ..");
         }
-        printf(" | ");
+        printf("    | ");
         MV.registros[IP] -= cont;
+        cont = 0;
         caracter = MV.memoria[punteroReg(MV,IP)];
         if(caracter != '\0'){
-            while(caracter != '\0' ){
+            while(caracter != '\0'){
                 if(caracter < 32 || caracter == 127){
-                    printf("  .  ");
+                    printf(".");
                 }
                 else{
                     printf("%c", caracter);
                 }
                 MV.registros[IP] += 1;
+                cont +=1;
                 caracter = MV.memoria[punteroReg(MV,IP)];
             }
         }
@@ -1284,7 +1288,7 @@ void DisassemblerKS(mv MV){
         MV.registros[IP] += 1;
         cont = 0;
         ptrIP = punteroReg(MV,IP);
-        printf("\n");
+        printf("\n\n");
     }
         
 }
