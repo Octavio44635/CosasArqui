@@ -1,7 +1,6 @@
 text1 equ "Holaholaholahola"
 valor equ 4
 
-sys 0x07
 push valor
 push valor
 pop [ds+valor]

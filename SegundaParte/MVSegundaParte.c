@@ -22,7 +22,7 @@
 //Cambiar las constantes en todo el codigo
 
 
-#define Tamtot 16384 //16KiB
+#define Tamtot 16 //16KiB
 #define TamanioRegistros 16
 #define TamanioTablaS 8
 
@@ -128,8 +128,10 @@ int main(int argc, char *argv[]){
     tamanio = buscaParametroTamanio(argc, argv);
     if(tamanio<0)
         tamanio = Tamtot;
-    MV.memoria = malloc(tamanio*sizeof(char));
+    MV.memoria = malloc(tamanio*sizeof(char)*1024);
+    tamanio *= 1024; //Tamanio en bytes
     
+    //Aca hay que solucionar cosas
     argcPS = argc;
     TamPS = creaPS(&MV,&argcPS, argv, &ptr);
 
@@ -141,7 +143,7 @@ int main(int argc, char *argv[]){
     int offsetEntry = punteroReg(MV, IP); //Es para despues
     printf("offsetEntry: %04X \n", offsetEntry);
 
-    cargaSS(&MV,ptr, argc);
+    cargaSS(&MV,ptr, argcPS);
     
     MV.registros[AC] = argv[posVMI];//polemico
 
@@ -234,6 +236,7 @@ void lecturaVMI(mv* MV, int tamanio, char* arch){
 
         if((*MV).memoria[5] == 1){
             tamanio = ((*MV).memoria[6]&0x00FF) << 8 | ((*MV).memoria[7] & 0x00FF);
+            tamanio *= 1024;
         }
 
         int pos=0;
@@ -361,12 +364,18 @@ int creaPS(mv* MV, int* argc, char *argv[], char** ptr){ //Se llama argc por que
 
         }
         *argc = *argc - nroPal;
-        *argc /= 4;
+        *argc /= 2; //polemico;
     }
     else{
         *ptr = -1;
         *argc = 0;
     }
+    //printf("%d \n", acum);
+    //i=0;
+    //while(i<acum){
+    //    printf("posicion [%d]: %c \n",i, MV->memoria[i]);
+    //    i++;
+    //}
     return acum;
 
 }
@@ -482,9 +491,12 @@ void leeOrdenCS(mv* MV){
     MV->registros[IP] += cont;
     cont = 0;
 
-    if((operacion >= 0x0 & operacion <= 0x8) || (operacion >=0x0B && operacion <= 0x0D))//Solo un operando
+    if((operacion >= 0x0 & operacion <= 0x8) || (operacion >=0x0B && operacion <= 0x0E))//Solo un operando
         if(opB != 0)//Se usa B, no A. Ignoramos A
             Funciones[operacion](MV, 0, BytesB, instruccion); //Llama a la funcion correspondiente
+        else if(operacion ==0x0E){
+            Funciones[operacion](MV, 0, BytesB, instruccion);
+        }
         else{
             printf("Error, operando B nulo \n");
             STOP(MV, opA, opB, instruccion); //Error
@@ -855,7 +867,7 @@ void setMemoria(mv* MV, int posMem, int valorB){
         (*MV).registros[SP]-=4;
         indice=((*MV).registros[SP] >>16) &0x0000FFFF; //Entrada segmento SS
 
-        if ((MV->registros[SP]&0x0000FFFF) <= 0){
+        if ((MV->registros[SP]&0x0000FFFF) <= MV->TSeg[indice].Base){
             printf("Error: Stack overflow\n");
             STOP(MV, 0, 0, 0);
         }
@@ -876,7 +888,7 @@ void setMemoria(mv* MV, int posMem, int valorB){
         }
 
         valor = ValoropST(3, punteroReg(*MV,SP), MV); //Extrae valor de la memoria
-
+        valor = valor + MV->TSeg[(MV->registros[CS]>>16) & 0x00FFFF].Base; //Ajusta la direccion de memoria
         set(MV, opB, tipoB, valor);  // Escribe valor en el destino.
         (*MV).registros[SP] +=4;  //Incremento SP
     }
@@ -1288,7 +1300,7 @@ void DisassemblerKS(mv MV){
         MV.registros[IP] += 1;
         cont = 0;
         ptrIP = punteroReg(MV,IP);
-        printf("\n\n");
+        printf("\n");
     }
         
 }

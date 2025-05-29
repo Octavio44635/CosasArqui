@@ -11,11 +11,8 @@
             "request": "launch",
             "program": "C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/SegundaParte/a.exe",
             "args": [
-                "C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/SegundaParte/Archivos/prueba.vmi",
-                "-d",
-                "-p",
-                "pal1",
-                "pal2"
+                "C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/SegundaParte/Cuestionario/sample2.vmi",
+                "-d"
             ],
             "stopAtEntry": false,
             "cwd": "C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/SegundaParte",
