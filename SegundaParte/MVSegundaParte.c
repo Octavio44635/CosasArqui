@@ -125,18 +125,19 @@ int main(int argc, char *argv[]){
     int posVMI=buscaStringArgv(1, ".vmi", argv, argc);
     char * ptr=NULL;
 
-    tamanio = buscaParametroTamanio(argc, argv);
-    if(tamanio<0)
-        tamanio = Tamtot;
-    MV.memoria = malloc(tamanio*sizeof(char)*1024);
-    tamanio *= 1024; //Tamanio en bytes
-    
-    //Aca hay que solucionar cosas
-    argcPS = argc;
-    TamPS = creaPS(&MV,&argcPS, argv, &ptr);
+    if(posVMX){
+        tamanio = buscaParametroTamanio(argc, argv);
+        if(tamanio<0)
+            tamanio = Tamtot;
+        MV.memoria = malloc(tamanio*sizeof(char)*1024);
+        tamanio *= 1024; //Tamanio en bytes
+        
+        //Aca hay que solucionar cosas
+        argcPS = argc;
+        TamPS = creaPS(&MV,&argcPS, argv, &ptr);
 
-    if(posVMX)
         lectura (&MV, argv[posVMX], tamanio, TamPS);
+    }
     else if(posVMI && !posVMX) //Si esto da verdadero es por que no hay vmx
         lecturaVMI(&MV, tamanio, argv[posVMI]);
 
@@ -163,13 +164,13 @@ void lectura(mv* MV, char* archivo, int tamanio, int TamPS){
     FILE *arch = fopen(archivo, "rb");
     //FILE *arch = fopen("C:/Users/Octii/Desktop/Facultad/3erAnio/ArquitecturadeComputadoras/CosasArqui/PrimerParte/ArchivosMV/ArchivosSample/sample6.vmx", "rb");
     if( arch != NULL){
-        fread((*MV).memoria, sizeof(char), 8, arch); //Se leen bytes de forma arbitraria, los primeros 7 son el header, siendo los ultimos 2 el tamaño
+        fread((*MV).memoria+TamPS, sizeof(char), 8, arch); //Se leen bytes de forma arbitraria, los primeros 7 son el header, siendo los ultimos 2 el tamaño
         char* cabecera = "VMX25";
-        int i=0;
+        int i=TamPS;
         int iguales = 1;
         int tamDS=0, tamES=0, tamSS=0, tamKS=0, offsetEntry=0;
-        while(i<5 && iguales){
-            iguales = (cabecera[i] == (*MV).memoria[i]);
+        while(i<TamPS + 5 && iguales){
+            iguales = (cabecera[i-TamPS] == (*MV).memoria[i]);
             i++;
         }
         if(!iguales ){
@@ -178,24 +179,24 @@ void lectura(mv* MV, char* archivo, int tamanio, int TamPS){
             STOP(MV, 0, 0, 0); //Error
         }
 
-        int tamCS = (((*MV).memoria[6]&0x00FF) << 8 )| ((*MV).memoria[7] & 0x00FF);
+        int tamCS = (((*MV).memoria[TamPS + 6]&0x00FF) << 8 )| ((*MV).memoria[TamPS + 7] & 0x00FF);
         //Vector de registros
 
 
         //Llamados segun la version
         int arregloTamanios[6] = {TamPS,tamKS, tamCS, tamDS, tamES, tamSS}; //Arreglo de tamanios de segmentos
-        printf("version: %d \n", MV->memoria[5]);
-        if((*MV).memoria[5] == 0x01){
-            fread((*MV).memoria,sizeof(char),tamCS,arch);
+        printf("version: %d \n", MV->memoria[TamPS + 5]);
+        if((*MV).memoria[TamPS + 5] == 0x01){
+            fread((*MV).memoria + TamPS,sizeof(char),tamCS,arch);
             fclose(arch);
         }
-        else if(MV->memoria[5] == 0x02){
-            fread((*MV).memoria,sizeof(char),10,arch); //Lectura de la cabecera de Archivo VMX
-            arregloTamanios[3] = (((*MV).memoria[0]&0x00FF) << 8 )| ((*MV).memoria[1] & 0x00FF); //DS
-            arregloTamanios[4] = (((*MV).memoria[2]&0x00FF) << 8 )| ((*MV).memoria[3] & 0x00FF); //ES
-            arregloTamanios[5] = (((*MV).memoria[4]&0x00FF) << 8 )| ((*MV).memoria[5] & 0x00FF); //SS
-            arregloTamanios[1] = (((*MV).memoria[6]&0x00FF) << 8 )| ((*MV).memoria[7] & 0x00FF); //KS
-            offsetEntry = ((*MV).memoria[8]&0x00FF) << 8 | ((*MV).memoria[9] & 0x00FF);
+        else if(MV->memoria[TamPS + 5] == 0x02){
+            fread((*MV).memoria + TamPS,sizeof(char),10,arch); //Lectura de la cabecera de Archivo VMX
+            arregloTamanios[3] = (((*MV).memoria[TamPS + 0]&0x00FF) << 8 )| ((*MV).memoria[TamPS + 1] & 0x00FF); //DS
+            arregloTamanios[4] = (((*MV).memoria[TamPS + 2]&0x00FF) << 8 )| ((*MV).memoria[TamPS + 3] & 0x00FF); //ES
+            arregloTamanios[5] = (((*MV).memoria[TamPS + 4]&0x00FF) << 8 )| ((*MV).memoria[TamPS + 5] & 0x00FF); //SS
+            arregloTamanios[1] = (((*MV).memoria[TamPS + 6]&0x00FF) << 8 )| ((*MV).memoria[TamPS + 7] & 0x00FF); //KS
+            offsetEntry = ((*MV).memoria[TamPS + 8]&0x00FF) << 8 | ((*MV).memoria[TamPS + 9] & 0x00FF);
 
             arregloTamanios[0] = TamPS;
             arregloTamanios[2] = tamCS;
@@ -363,19 +364,18 @@ int creaPS(mv* MV, int* argc, char *argv[], char** ptr){ //Se llama argc por que
             puntero += strlen(argv[i])+1;
 
         }
-        *argc = *argc - nroPal;
-        *argc /= 2; //polemico;
+        *argc = nroPal;
     }
     else{
         *ptr = -1;
         *argc = 0;
     }
-    //printf("%d \n", acum);
-    //i=0;
-    //while(i<acum){
-    //    printf("posicion [%d]: %c \n",i, MV->memoria[i]);
-    //    i++;
-    //}
+    printf("%d \n", acum);
+    i=0;
+    while(i<acum){
+        printf("posicion [%d]: %02X \n",i, MV->memoria[i]);
+        i++;
+    }
     return acum;
 
 }
@@ -613,7 +613,7 @@ int ValoropST(int tipo, int op, mv* MV){  //Valor operando Segun Tipo
             int tamcelda = ObtenerTamanioCelda(*MV, op);
             int direccion = op >> 2;
             for (int i = 0; i < tamcelda; i++) {
-                valor = (valor << 8) | ((*MV).memoria[direccion + i] & 0xFF);
+                valor = (valor << 8) | ((*MV).memoria[direccion + i] & 0x00FF);
             }
             return valor;
         }
@@ -867,7 +867,7 @@ void setMemoria(mv* MV, int posMem, int valorB){
         (*MV).registros[SP]-=4;
         indice=((*MV).registros[SP] >>16) &0x0000FFFF; //Entrada segmento SS
 
-        if ((MV->registros[SP]&0x0000FFFF) <= MV->TSeg[indice].Base){
+        if ((MV->TSeg[indice].Base + MV->registros[SP]&0x0000FFFF) < MV->TSeg[indice].Base){
             printf("Error: Stack overflow\n");
             STOP(MV, 0, 0, 0);
         }
