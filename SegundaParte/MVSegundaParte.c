@@ -615,7 +615,7 @@ int ValoropST(int tipo, int op, mv* MV){  //Valor operando Segun Tipo
             int tamcelda = ObtenerTamanioCelda(*MV, op);
             int direccion = op >> 2;
             for (int i = 0; i < tamcelda; i++) {
-                valor = (valor << 8) | ((*MV).memoria[direccion + i] & 0x00FF);//Hay que ver que onda esto
+                valor = (valor << 8) | ((*MV).memoria[direccion + i]&0x00FF);//Hay que ver que onda esto
             }
             return valor;
         }
@@ -724,42 +724,49 @@ void setMemoria(mv* MV, int posMem, int valorB){
     }
 
     void JMP (mv* MV, int opA, int opB, char operacion){
-        (*MV).registros[IP] = punteroReg(*MV, CS) + opB;
+        MV->registros[IP] &= 0xFFFF0000;
+        (*MV).registros[IP] |= opB;
     }
 
     void JZ (mv* MV, int opA, int opB, char operacion){
         if ((*MV).registros[CC] == 0x40000000 ){ //CC
-            (*MV).registros[IP] = punteroReg(*MV, CS) + opB; //IP
+            MV->registros[IP] &= 0xFFFF0000;
+             (*MV).registros[IP] |= opB; //IP
         }
     }
 
     void JP(mv* MV, int opA, int opB, char operacion){
         if (((*MV).registros[CC] == 0)) {
-            (*MV).registros[IP] = punteroReg(*MV, CS) + opB; // IP
+            MV->registros[IP] &= 0xFFFF0000;
+        (*MV).registros[IP] |= opB; // IP
         }
     }
 
     void JN (mv* MV, int opA, int opB, char operacion){
         if (((*MV).registros[CC]) == 0x80000000){ //CC
-            (*MV).registros[IP] = punteroReg(*MV, CS) + opB; //IP
+            MV->registros[IP] &= 0xFFFF0000;
+        (*MV).registros[IP] |= opB; //IP //IP
         }
     }
 
     void JNZ (mv* MV, int opA, int opB, char operacion){
         if ((*MV).registros[CC] != 0x40000000){ //CC
-            (*MV).registros[IP] = punteroReg(*MV, CS) + opB; //IP
+            MV->registros[IP] &= 0xFFFF0000;
+        (*MV).registros[IP] |= opB; //IP
         }
     }
 
     void JNP (mv* MV, int opA, int opB, char operacion){
         if ((*MV).registros[CC] != 0){ //CC
-            (*MV).registros[IP] = punteroReg(*MV, CS) + opB; //IP
+            MV->registros[IP] &= 0xFFFF0000;
+        (*MV).registros[IP] |= opB; //IP
         }
     }
 
     void JNN (mv* MV, int opA, int opB, char operacion){
         if (((*MV).registros[CC]) != 0x80000000){ //CC
-            (*MV).registros[IP] = punteroReg(*MV, CS) + opB; //IP
+            MV->registros[IP] &= 0xFFFF0000;
+        (*MV).registros[IP] |= opB; //IP
         }
     }
 
@@ -898,11 +905,12 @@ void setMemoria(mv* MV, int posMem, int valorB){
 
     void CALL (mv* MV, int opA, int opB, char operacion){
         char tipoB= (operacion>>6) & 0x3;
-        int Dirdestino= ValoropST(tipoB,opB,MV); //Direccion a la que salta
-
+        int Dirdestino= ValoropST(tipoB,opB,MV);
+        int base = getReg(*MV, CS, 0); //Direccion a la que salta
+        Dirdestino = base | Dirdestino;
         //IP apunta ya a la direccion a la siguiente direccion.
 
-        PUSH (MV,0,punteroReg(*MV,IP), 0x80); //revisar que el uso de punteroReg(MV,IP) sea correcto
+        PUSH (MV,0,getReg(*MV,IP,0), 0x80); //revisar que el uso de punteroReg(MV,IP) sea correcto
         
 
          //Salto
@@ -968,7 +976,6 @@ void SYS (mv* MV, int opA, int opB, char operacion){
                 SYSTRINGR(MV, puntEdx, ((CH<<8) & 0xFF00) | CL ,0); //AL no nos sirve por que el formato es String o char en su defecto
             }
             else if(valorB == 4){
-                printf("[%04X] ",puntEdx);
                 SYSTRINGW(MV, puntEdx, ((CH<<8) & 0xFF00) | CL, 0);
             }
             else if(valorB == 7){
