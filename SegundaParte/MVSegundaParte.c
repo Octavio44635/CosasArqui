@@ -39,7 +39,7 @@ typedef struct{
     TablaS TSeg[TamanioTablaS];} mv;
 
 void lectura(mv*, char*, int, int); //LEE VMX
-void lecturaVMI(mv*, int, char*); //LEE VMI
+void lecturaVMI(mv*, char*); //LEE VMI
 void CargaRegistros(mv*, int[], int, int); //INICIALIZA LOS REG Y LA TABLA
 int sumaTamanio(int[]); //SUMA EL TAMAÑO DE LOS SEGMENTOS DE LA TABLA
 int creaPS(mv*, int*, char*[],char**); //CREA EL PARAM SEGMENT
@@ -137,14 +137,15 @@ int main(int argc, char *argv[]){
         TamPS = creaPS(&MV,&argcPS, argv, &ptr);
 
         lectura (&MV, argv[posVMX], tamanio, TamPS);
-    }
-    else if(posVMI && !posVMX) //Si esto da verdadero es por que no hay vmx
-        lecturaVMI(&MV, tamanio, argv[posVMI]);
-
-    int offsetEntry = punteroReg(MV, IP); //Es para despues
-    printf("offsetEntry: %04X \n", offsetEntry);
+        
 
     cargaSS(&MV,ptr, argcPS);
+    }
+    else if(posVMI && !posVMX) //Si esto da verdadero es por que no hay vmx
+        lecturaVMI(&MV, argv[posVMI]);
+    int offsetEntry = punteroReg(MV, IP); //Es para despues
+    printf("offsetEntry: %04X \n", offsetEntry);
+    
     
     MV.registros[AC] = argv[posVMI];//polemico
 
@@ -219,14 +220,15 @@ void lectura(mv* MV, char* archivo, int tamanio, int TamPS){
 
 }
 
-void lecturaVMI(mv* MV, int tamanio, char* arch){
+void lecturaVMI(mv* MV, char* arch){
     FILE *archivo = fopen(arch, "rb");
     char* header = "VMI25";
-    int i=0, iguales = 1;
+    int i=0, iguales = 1, tamanio;
+    char* aux = malloc(sizeof(char)*8);
     if(archivo != NULL){
-        fread((*MV).memoria,sizeof(char),8,archivo); //Lectura header
+        fread(aux,sizeof(char),8,archivo); //Lectura header
         while(i<5 && iguales){
-            iguales = (header[i] == (*MV).memoria[i]);
+            iguales = (header[i] == aux[i]);
             i++;
         }
         if(!iguales){
@@ -235,9 +237,10 @@ void lecturaVMI(mv* MV, int tamanio, char* arch){
             STOP(MV, 0, 0, 0); //Error
         }
 
-        if((*MV).memoria[5] == 1){
-            tamanio = ((*MV).memoria[6]&0x00FF) << 8 | ((*MV).memoria[7] & 0x00FF);
+        if(aux[5] == 1){
+            tamanio = (aux[6]&0x00FF) << 8 | (aux[7] & 0x00FF);
             tamanio *= 1024;
+            MV->memoria = malloc(sizeof(char)*tamanio);
         }
 
         int pos=0;
@@ -457,7 +460,7 @@ void cargaSS(mv* MV, int punt, int argc){
 void LeeCS (mv *MV){
 
     int indiceCS = (MV->registros[CS]>>16) & 0x0000FFFF;
-    while ((MV->registros[IP]&0x0000FFFF) < MV->TSeg[indiceCS].Tamanio){//Eso esta bien por que se compara el offset absoluto con el tamaño que tambien es absoluto
+    while ((MV->registros[IP]&0x0000FFFF) < MV->TSeg[indiceCS].Base + MV->TSeg[indiceCS].Tamanio){//Eso esta bien por que se compara el offset absoluto con el tamaño que tambien es absoluto
         leeOrdenCS(MV);
     }
 }
@@ -479,7 +482,7 @@ void leeOrdenCS(mv* MV){
     //xx x_x_xxxx
     int BytesA=0, BytesB=0;
 
-    //Deberias sacar los bits
+
     FuncOperandos[opB](*MV, &cont, &BytesB); //(MV, cont, bytesOp);
     //Deberias cortar el dato
 
@@ -490,7 +493,6 @@ void leeOrdenCS(mv* MV){
     cont++;
     MV->registros[IP] += cont;
     cont = 0;
-
     if((operacion >= 0x0 & operacion <= 0x8) || (operacion >=0x0B && operacion <= 0x0E))//Solo un operando
         if(opB != 0)//Se usa B, no A. Ignoramos A
             Funciones[operacion](MV, 0, BytesB, instruccion); //Llama a la funcion correspondiente
@@ -498,7 +500,7 @@ void leeOrdenCS(mv* MV){
             Funciones[operacion](MV, 0, BytesB, instruccion);
         }
         else{
-            printf("Error, operando B nulo \n");
+            printf("Error, operando B nulo \n [%04X] , [%d]", MV->registros[IP], MV->registros[IP]);
             STOP(MV, opA, opB, instruccion); //Error
         }
     else
@@ -562,7 +564,7 @@ void MEMORIA(mv MV, int *cont, int *op){
     PosMem = MV.TSeg[basereg].Base + offset + inmediato;
     //*op = MV.memoria[PosMem];
 
-    if (PosMem >= MV.TSeg[basereg].Base + MV.TSeg[basereg].Tamanio) {
+    if (PosMem > MV.TSeg[basereg].Base + MV.TSeg[basereg].Tamanio) {
         printf("Error: direccion de memoria fuera de rango %d\n", MV.registros[IP]);
         STOP(&MV, PosMem, 0, 0);
     }
@@ -613,7 +615,7 @@ int ValoropST(int tipo, int op, mv* MV){  //Valor operando Segun Tipo
             int tamcelda = ObtenerTamanioCelda(*MV, op);
             int direccion = op >> 2;
             for (int i = 0; i < tamcelda; i++) {
-                valor = (valor << 8) | ((*MV).memoria[direccion + i] & 0x00FF);
+                valor = (valor << 8) | ((*MV).memoria[direccion + i] & 0x00FF);//Hay que ver que onda esto
             }
             return valor;
         }
@@ -678,6 +680,7 @@ void setMemoria(mv* MV, int posMem, int valorB){
     void MOV (mv* MV, int opA, int opB, char operacion){
         char tipoA=(operacion >> 4) & 0x3;
         char tipoB=(operacion>>6) & 0x3;
+        
         set(MV, opA, tipoA,ValoropST(tipoB, opB, MV));
     }
 
@@ -882,13 +885,13 @@ void setMemoria(mv* MV, int posMem, int valorB){
         int  limite= base + (*MV).TSeg[indice].Tamanio;
         int  valor;
 
-        if (punteroReg(*MV, IP)> limite){
+        if (punteroReg(*MV, IP) >= limite){
             printf("Error: Stack underflow\n");
             STOP(MV, 0, 0, 0);
         }
 
-        valor = ValoropST(3, punteroReg(*MV,SP), MV); //Extrae valor de la memoria
-        valor = valor + MV->TSeg[(MV->registros[CS]>>16) & 0x00FFFF].Base; //Ajusta la direccion de memoria
+        valor = ValoropST(3, punteroReg(*MV,SP)<<2, MV); //Extrae valor de la memoria
+        //valor = valor + MV->TSeg[(MV->registros[CS]>>16) & 0x00FFFF].Base; //Ajusta la direccion de memoria
         set(MV, opB, tipoB, valor);  // Escribe valor en el destino.
         (*MV).registros[SP] +=4;  //Incremento SP
     }
@@ -952,18 +955,20 @@ void SYS (mv* MV, int opA, int opB, char operacion){
 
     //Hasta aca todo claro
 
-    printf("SYS: %d\n", valorB);
+
+    
     if (valorB == 1)
         SYSR(MV, puntEdx, CH, CL, AL);
     else
-        if(valorB == 2)
+        if(valorB == 2){
             SYSW(MV, puntEdx, CH, CL, AL);
+        }
         else{
             if(valorB == 3){
                 SYSTRINGR(MV, puntEdx, ((CH<<8) & 0xFF00) | CL ,0); //AL no nos sirve por que el formato es String o char en su defecto
-
             }
             else if(valorB == 4){
+                printf("[%04X] ",puntEdx);
                 SYSTRINGW(MV, puntEdx, ((CH<<8) & 0xFF00) | CL, 0);
             }
             else if(valorB == 7){
@@ -1130,9 +1135,13 @@ void EscrFormato(mv* MV, int i,int punt, short int AL, char CH){
 }
 
 void SYSTRINGR(mv* MV, int punt, short int CX, short int AL){
-    char *string = malloc(sizeof(char)*CX);
+    
+    char *string;
+    if(CX > 0)
+        string = malloc(sizeof(char)*CX);
+    else
+        string = malloc(sizeof(char)*100);
 
-    printf("Escribir cadena de %d largo: \n" ,CX);
     scanf("%s", string);
 
     if (strlen(string) <= CX){
@@ -1148,12 +1157,10 @@ void SYSTRINGR(mv* MV, int punt, short int CX, short int AL){
 }
 //Se hicieron cambios en estas funciones, revisar
 void SYSTRINGW(mv* MV, int punt, short int CX, short int AL){
-    printf("[%04X]  ", punt);
     while(MV->memoria[punt] != '\0'){
         printf("%c", (*MV).memoria[punt]);
         punt += 1;
     }
-    printf("\n");
 }
 
 void SYSF(mv* MV){
@@ -1311,7 +1318,7 @@ void Disassembler(mv* MV, int offset){
     int cont=0; //Este contador es para saber cuantos bytes se leyeron
 
     int indice = (MV->registros[KS]>>16) & 0x00FFFF; //Entrada Tabla Segmentos
-    if( MV->TSeg[indice].Tamanio > 0){
+    if( indice < 8 && indice >= 0 && MV->TSeg[indice].Tamanio > 0){
         printf("Disassembler KS:\n");
         MV->registros[IP]= punteroReg(*MV, KS); //IP = KS
         DisassemblerKS(*MV);
