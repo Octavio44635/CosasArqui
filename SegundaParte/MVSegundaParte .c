@@ -614,12 +614,9 @@ int ValoropST(int tipo, int op, mv* MV){  //Valor operando Segun Tipo
         case 3: { // Memoria
             int tamcelda = ObtenerTamanioCelda(*MV, op);
             int direccion = op >> 2;
-            if(tamcelda == 1)
-                for (int i = 0; i < tamcelda; i++)
-                    valor = (valor << 8) | ((*MV).memoria[direccion + i]);//Hay que ver que onda esto
-            else
-                for (int i = 0; i < tamcelda; i++)
-                    valor = (valor << 8) | ((*MV).memoria[direccion + i]&0x00FF);//Hay que ver que onda esto
+            for (int i = 0; i < tamcelda; i++) {
+                valor = (valor << 8) | ((*MV).memoria[direccion + i]&0x00FF);//Hay que ver que onda esto
+            }
             return valor;
         }
     }
@@ -676,7 +673,6 @@ void setMemoria(mv* MV, int posMem, int valorB){
     int direccion = posMem >> 2;
     for(int i=tamcelda-1; i>=0; i--){
         (*MV).memoria[direccion + i] = (valorB >>((tamcelda-1- i)*8)) & 0x00FF;
-        printf("");
     }
 }
 
@@ -909,7 +905,7 @@ void setMemoria(mv* MV, int posMem, int valorB){
 
     void CALL (mv* MV, int opA, int opB, char operacion){
         char tipoB= (operacion>>6) & 0x3;
-        int Dirdestino= abs(opB); //Esto podria ser solamente opB
+        int Dirdestino= ValoropST(tipoB,opB,MV);
         int base = getReg(*MV, CS, 0); //Direccion a la que salta
         Dirdestino = base | Dirdestino;
         //IP apunta ya a la direccion a la siguiente direccion.
