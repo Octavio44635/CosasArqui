@@ -460,7 +460,7 @@ void cargaSS(mv* MV, int punt, int argc){
 void LeeCS (mv *MV){
 
     int indiceCS = (MV->registros[CS]>>16) & 0x0000FFFF;
-    while ((MV->registros[IP]&0x0000FFFF) < MV->TSeg[indiceCS].Base + MV->TSeg[indiceCS].Tamanio){//Eso esta bien por que se compara el offset absoluto con el tamaño que tambien es absoluto
+    while ((MV->registros[IP]&0x0000FFFF) < MV->TSeg[indiceCS].Tamanio && MV->registros[IP] > MV->TSeg[MV->registros[IP]>>16].Base){//Eso esta bien por que se compara el offset absoluto con el tamaño que tambien es absoluto
         leeOrdenCS(MV);
     }
 }
@@ -509,7 +509,7 @@ void leeOrdenCS(mv* MV){
                 if(opB != 0)
                     Funciones[operacion](MV, BytesA, BytesB, instruccion); //Llama a la funcion correspondiente
                 else{
-                    printf("Error, operando B nulo\n");
+                    printf("Error, operando B nulo\n [%04X] \n", MV->registros[IP]);
                     STOP(MV, opA, opB, instruccion); //Error
                 }
             }
