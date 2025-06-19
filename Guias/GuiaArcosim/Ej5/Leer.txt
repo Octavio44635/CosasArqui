@@ -1,2 +1,0 @@
-Se me ocurre que se puede hacer 4(aprox) multiplexores para simular condiciones if, no tengo ganas de hacerlo
-no me parece lo mas eficiente y prefiero preguntarlo
